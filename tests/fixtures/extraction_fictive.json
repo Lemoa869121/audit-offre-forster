@@ -1,0 +1,271 @@
+{
+  "document": {
+    "fournisseur": "Fournisseur fictif",
+    "reference_affaire": "2026-TEST-0001",
+    "client": "CLIENT FICTIF",
+    "date_document": "01/10/2026",
+    "sections_presentes": [
+      "offre_prix",
+      "analyse_matiere",
+      "consultation_vitrages"
+    ]
+  },
+  "offre": {
+    "positions": [
+      {
+        "numero": "001",
+        "quantite": 1,
+        "designation": "châssis fixe + porte",
+        "largeur_mm": 2000,
+        "hauteur_mm": 2200,
+        "systeme": "UNICO Standard",
+        "nb_vantaux": 1,
+        "nb_fixes": 1,
+        "prix_unitaire": 1000.0,
+        "total": 1000.0,
+        "materiau_parclose_description": "Aluminium",
+        "materiau_parclose_configuration": "Acier",
+        "a_bloc_descriptif": true,
+        "elements_hors_gamme": [
+          "Cylindre"
+        ],
+        "texte_source": "001 1 Pce châssis 1 000,00 ... Parclose : Acier",
+        "a_verifier": false
+      },
+      {
+        "numero": "002",
+        "quantite": 1,
+        "designation": "Porte 1 vtl",
+        "largeur_mm": 1000,
+        "hauteur_mm": 2200,
+        "systeme": "UNICO Standard",
+        "nb_vantaux": 1,
+        "nb_fixes": 0,
+        "prix_unitaire": 800.0,
+        "total": 800.0,
+        "materiau_parclose_description": "Aluminium",
+        "materiau_parclose_configuration": null,
+        "a_bloc_descriptif": false,
+        "elements_hors_gamme": [],
+        "texte_source": "002 1 Pce Porte 1 vtl 800,00",
+        "a_verifier": false
+      },
+      {
+        "numero": "003",
+        "quantite": 1,
+        "designation": "Volume fixe",
+        "largeur_mm": 800,
+        "hauteur_mm": 1000,
+        "systeme": "UNICO Standard",
+        "nb_vantaux": 0,
+        "nb_fixes": 1,
+        "prix_unitaire": 200.0,
+        "total": 200.0,
+        "materiau_parclose_description": "Aluminium",
+        "materiau_parclose_configuration": null,
+        "a_bloc_descriptif": false,
+        "elements_hors_gamme": [],
+        "texte_source": "003 1 Pce Volume fixe 200,00",
+        "a_verifier": false
+      }
+    ],
+    "total_ht": {
+      "valeur": 2000.0,
+      "texte_source": "Total HT net 2 000,00 EUR",
+      "a_verifier": false
+    }
+  },
+  "analyse_matiere": {
+    "lignes": [
+      {
+        "famille": "profile",
+        "reference": "100.001 ZM",
+        "designation": "Profilé fictif, Acier",
+        "materiau": null,
+        "quantite_texte": "3 x 6 m (15,0)",
+        "quantite_commandee": 18,
+        "besoin": 15.0,
+        "unite_quantite": "m",
+        "conditionnement": "barre 6 m",
+        "prix_unitaire": 36.0,
+        "unite_prix": "m",
+        "total": 648.0,
+        "texte_source": "100.001 ZM Profilé fictif, Acier 36.0 648.0",
+        "a_verifier": false
+      },
+      {
+        "famille": "profile",
+        "reference": "901327",
+        "designation": "Parclose aluminium, Aluminium",
+        "materiau": "Aluminium",
+        "quantite_texte": "4 x 6 m (20,5)",
+        "quantite_commandee": 24,
+        "besoin": 20.5,
+        "unite_quantite": "m",
+        "conditionnement": "barre 6 m",
+        "prix_unitaire": 4.39,
+        "unite_prix": "m",
+        "total": 105.36,
+        "texte_source": "901327 Parclose aluminium, Aluminium 4.39 105.36",
+        "a_verifier": false
+      },
+      {
+        "famille": "ferrure",
+        "reference": "900001",
+        "designation": "paumelle à souder",
+        "materiau": null,
+        "quantite_texte": "3 UV á 2 pce (6)",
+        "quantite_commandee": 6,
+        "besoin": 6,
+        "unite_quantite": "pce",
+        "conditionnement": "UV 2 pce",
+        "prix_unitaire": 20.0,
+        "unite_prix": "pce",
+        "total": 120.0,
+        "texte_source": "900001 paumelle à souder 20.0 120.0",
+        "a_verifier": false
+      },
+      {
+        "famille": "ferrure",
+        "reference": "987009",
+        "designation": "gâche",
+        "materiau": null,
+        "quantite_texte": "2 pce (2)",
+        "quantite_commandee": 2,
+        "besoin": 2,
+        "unite_quantite": "pce",
+        "conditionnement": null,
+        "prix_unitaire": 13.55,
+        "unite_prix": "pce",
+        "total": 27.1,
+        "texte_source": "987009 gâche 13.55 27.1",
+        "a_verifier": false
+      },
+      {
+        "famille": "accessoire",
+        "reference": "907340",
+        "designation": "standard door handle shaft",
+        "materiau": null,
+        "quantite_texte": "1 pce (1)",
+        "quantite_commandee": 1,
+        "besoin": 1,
+        "unite_quantite": "pce",
+        "conditionnement": null,
+        "prix_unitaire": 4.28,
+        "unite_prix": "pce",
+        "total": 4.28,
+        "texte_source": "907340 standard door handle shaft 4.28 4.28",
+        "a_verifier": false
+      },
+      {
+        "famille": "accessoire",
+        "reference": "999999",
+        "designation": "accessoire fictif",
+        "materiau": null,
+        "quantite_texte": "10 pce (10)",
+        "quantite_commandee": 10,
+        "besoin": 10,
+        "unite_quantite": "pce",
+        "conditionnement": null,
+        "prix_unitaire": 0.0,
+        "unite_prix": "pce",
+        "total": 0.0,
+        "texte_source": "999999 accessoire fictif 0.0 0.0",
+        "a_verifier": false
+      },
+      {
+        "famille": "joint",
+        "reference": "905386_25",
+        "designation": "joint de vitrage intérieur",
+        "materiau": null,
+        "quantite_texte": "1 UV á 25 m (21,0)",
+        "quantite_commandee": 25,
+        "besoin": 21.0,
+        "unite_quantite": "m",
+        "conditionnement": "UV 25 m",
+        "prix_unitaire": 2.62,
+        "unite_prix": "m",
+        "total": 65.5,
+        "texte_source": "905386_25 joint de vitrage intérieur 2.62 65.5",
+        "a_verifier": false
+      },
+      {
+        "famille": "joint",
+        "reference": "988001",
+        "designation": "ruban d'étanchéité de feuillure",
+        "materiau": null,
+        "quantite_texte": "1 UV á 100 m (8,0)",
+        "quantite_commandee": 100,
+        "besoin": 8.0,
+        "unite_quantite": "m",
+        "conditionnement": "UV 100 m",
+        "prix_unitaire": 0.48,
+        "unite_prix": "m",
+        "total": 48.0,
+        "texte_source": "988001 ruban d'étanchéité de feuillure 0.48 48.0",
+        "a_verifier": false
+      }
+    ],
+    "sous_totaux": [],
+    "total": {
+      "valeur": 1018.24,
+      "texte_source": "Total: 1 018,24",
+      "a_verifier": false
+    }
+  },
+  "vitrages": {
+    "lignes": [
+      {
+        "position": "001",
+        "numero": "1",
+        "quantite": 1,
+        "largeur_mm": 1100,
+        "hauteur_mm": 2000,
+        "surface_m2": 2.2,
+        "perimetre_m": 6.2,
+        "texte_source": "001 / 1"
+      },
+      {
+        "position": "001",
+        "numero": "2",
+        "quantite": 1,
+        "largeur_mm": 800,
+        "hauteur_mm": 2000,
+        "surface_m2": 1.6,
+        "perimetre_m": 5.6,
+        "texte_source": "001 / 2"
+      },
+      {
+        "position": "002",
+        "numero": "1",
+        "quantite": 1,
+        "largeur_mm": 800,
+        "hauteur_mm": 2000,
+        "surface_m2": 1.6,
+        "perimetre_m": 5.6,
+        "texte_source": "002 / 1"
+      },
+      {
+        "position": "003",
+        "numero": "1",
+        "quantite": 1,
+        "largeur_mm": 724,
+        "hauteur_mm": 924,
+        "surface_m2": 0.67,
+        "perimetre_m": 3.3,
+        "texte_source": "003 / 1"
+      }
+    ],
+    "somme_surface_m2": 6.07,
+    "somme_perimetre_m": 20.7
+  },
+  "observations": [
+    {
+      "type": "etude",
+      "famille": "vitrage",
+      "gravite": "alerte",
+      "message": "Observation fictive repérée par l'IA.",
+      "texte_source": "..."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+# Secrets
+.env
+
+# Base locale et PDF clients (données sensibles)
+*.db
+*.sqlite3
+uploads/
+*.pdf
+!tests/fixtures/*.pdf
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Prix réels (données commerciales) : jamais dans git
+data/prix_initiaux.json
