@@ -15,5 +15,6 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# Prix réels (données commerciales) : jamais dans git
-data/prix_initiaux.json
+# Prix réels et tarifs fournisseurs (données commerciales) : jamais dans git
+data/*.json
+!data/*.exemple.json

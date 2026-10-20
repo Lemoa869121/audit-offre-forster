@@ -21,17 +21,46 @@ REGLES_INITIALES: list[dict] = [
     },
     {
         "code": "PRIX_NUL",
-        "description": "Aucun prix unitaire ni total ne doit être à zéro (offre et analyse matière).",
+        "description": "Chaque article doit avoir un prix : aucun prix unitaire ni total manquant ou à zéro (offre et analyse matière).",
         "type": "prix", "famille": "global", "gravite": "erreur",
         "condition": {"controle": "prix_nul"},
         "seuil": None,
     },
     {
         "code": "ECART_PRIX_REF",
-        "description": "Alerte si un prix unitaire s'écarte du prix de référence au-delà de la tolérance.",
+        "description": ("Alerte si un prix unitaire s'écarte du prix net observé au-delà de la tolérance. "
+                        "Comparaison au tarif FFR remisé désactivée pour l'instant (comparer_tarif = false) : "
+                        "le tarif sert à vérifier que l'article existe et a un prix."),
         "type": "prix", "famille": "global", "gravite": "alerte",
-        "condition": {"controle": "ecart_prix_reference"},
+        "condition": {"controle": "ecart_prix_reference", "comparer_tarif": False},
         "seuil": None,  # None = tolérance globale (TOLERANCE_PRIX_PCT, 15 % par défaut)
+    },
+    # Remises sur le tarif FFR, déduites du devis 2026-XAG-01076 (contrôle "remise_tarif" :
+    # paramètre lu par ECART_PRIX_REF, pas un contrôle en soi). Seuil = remise en %.
+    # Non utilisées tant que ECART_PRIX_REF a comparer_tarif = false (remises à valider plus tard).
+    {
+        "code": "REMISE_PROFILE",
+        "description": "Remise sur le tarif FFR pour les profilés (35 % constaté sur 531/533 ZM).",
+        "type": "prix", "famille": "profile", "gravite": "info",
+        "condition": {"controle": "remise_tarif"}, "seuil": 35,
+    },
+    {
+        "code": "REMISE_FERRURE",
+        "description": "Remise sur le tarif FFR pour les ferrures (30 % constaté).",
+        "type": "prix", "famille": "ferrure", "gravite": "info",
+        "condition": {"controle": "remise_tarif"}, "seuil": 30,
+    },
+    {
+        "code": "REMISE_ACCESSOIRE",
+        "description": "Remise sur le tarif FFR pour les accessoires (30 % constaté).",
+        "type": "prix", "famille": "accessoire", "gravite": "info",
+        "condition": {"controle": "remise_tarif"}, "seuil": 30,
+    },
+    {
+        "code": "REMISE_JOINT",
+        "description": "Remise sur le tarif FFR pour les joints (30 % constaté sur 988001/988051, À CONFIRMER pour les joints EPDM).",
+        "type": "prix", "famille": "joint", "gravite": "info",
+        "condition": {"controle": "remise_tarif"}, "seuil": 30,
     },
     {
         "code": "PAUMELLES_PAR_VANTAIL",

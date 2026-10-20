@@ -2,10 +2,18 @@
 Initialisation de la base avec les règles et prix validés.
 Usage : python -m app.db.seed
 
-Idempotent : une règle (par code) ou un prix (par référence) déjà présent n'est pas recréé.
-Prix : data/prix_initiaux.json (réel, hors git) sinon data/prix_initiaux.exemple.json.
+Prix : fichier data/<FICHIER_PRIX>.json (réel, hors git, défaut "Tarif FFR 062026"),
+sinon data/tarif.exemple.json (prix fictifs). Format :
+    {"nom": "...", "articles": [...prix tarif...], "prix_nets_observes": [...prix nets...]}
+
+Idempotent :
+- règle déjà présente (même code) -> inchangée ;
+- prix déjà présent avec le même montant -> inchangé ;
+- prix déjà présent avec un montant différent (nouveau tarif) -> l'ancien est ARCHIVÉ,
+  le nouveau ajouté (historique conservé, jamais d'écrasement).
 """
 import json
+import os
 from pathlib import Path
 
 from sqlalchemy import select
@@ -15,6 +23,7 @@ from app.models import Famille, Gravite, PriceReference, Rule, Statut, TypeRegle
 from app.services.regles_initiales import REGLES_INITIALES, SOURCE
 
 DOSSIER_DATA = Path(__file__).resolve().parents[2] / "data"
+FICHIER_PRIX = os.getenv("FICHIER_PRIX", "Tarif FFR 062026")
 
 
 def _famille(valeur: str) -> Famille:
@@ -37,28 +46,47 @@ def charger_regles(db) -> int:
     return ajoutees
 
 
-def charger_prix(db) -> tuple[int, str]:
-    fichier = DOSSIER_DATA / "prix_initiaux.json"
+def _lire_fichier_prix() -> tuple[list[dict], str]:
+    fichier = DOSSIER_DATA / f"{FICHIER_PRIX}.json"
     if not fichier.exists():
-        fichier = DOSSIER_DATA / "prix_initiaux.exemple.json"
-    ajoutes = 0
-    for p in json.loads(fichier.read_text(encoding="utf-8")):
-        if db.scalar(select(PriceReference).where(PriceReference.reference_produit == p["reference_produit"])):
+        fichier = DOSSIER_DATA / "tarif.exemple.json"
+    contenu = json.loads(fichier.read_text(encoding="utf-8"))
+    prix = contenu.get("articles", []) + [dict(p, type_prix="net") for p in contenu.get("prix_nets_observes", [])]
+    return prix, fichier.name
+
+
+def charger_prix(db) -> dict:
+    prix, source = _lire_fichier_prix()
+    existants = {
+        (p.type_prix, p.reference_produit): p
+        for p in db.scalars(select(PriceReference).where(PriceReference.statut == Statut.actif))
+    }
+    stats = {"ajoutes": 0, "mis_a_jour": 0, "inchanges": 0, "source": source}
+    for p in prix:
+        type_prix = p.get("type_prix", "net")
+        actuel = existants.get((type_prix, p["reference_produit"]))
+        if actuel and actuel.prix_reference == p["prix_reference"]:
+            stats["inchanges"] += 1
             continue
+        if actuel:  # nouveau montant : on archive l'ancien
+            actuel.statut = Statut.archive
+            stats["mis_a_jour"] += 1
+        else:
+            stats["ajoutes"] += 1
         db.add(PriceReference(
-            reference_produit=p["reference_produit"], designation=p.get("designation"),
+            type_prix=type_prix, reference_produit=p["reference_produit"], designation=p.get("designation"),
             famille=_famille(p["famille"]), prix_reference=p["prix_reference"], unite=p["unite"],
-            conditionnement=p.get("conditionnement"), tolerance_pct=p.get("tolerance_pct"),
-            source=p.get("source"),
+            conditionnement=p.get("conditionnement"), tarif_par=p.get("tarif_par"), taille_uv=p.get("taille_uv"),
+            tolerance_pct=p.get("tolerance_pct"), source=p.get("source"),
         ))
-        ajoutes += 1
-    return ajoutes, fichier.name
+    return stats
 
 
 if __name__ == "__main__":
     init_db()
     with SessionLocal() as db:
         nb_regles = charger_regles(db)
-        nb_prix, source = charger_prix(db)
+        s = charger_prix(db)
         db.commit()
-    print(f"{nb_regles} règle(s) et {nb_prix} prix ajoutés (prix depuis {source}).")
+    print(f"{nb_regles} règle(s) ajoutée(s). Prix depuis {s['source']} : {s['ajoutes']} ajouté(s), "
+          f"{s['mis_a_jour']} mis à jour (ancien archivé), {s['inchanges']} inchangé(s).")

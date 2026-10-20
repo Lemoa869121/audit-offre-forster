@@ -13,8 +13,10 @@ Choix : les contrôles sont du code Python déterministe (pas d'appel IA ici).
 from __future__ import annotations
 
 import logging
+import re
+from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +42,10 @@ class AnomalieDetectee:
 
 @dataclass
 class Contexte:
-    prix_references: dict[str, dict]   # clé = référence normalisée
+    prix_references: dict[str, dict]   # prix NETS observés, clé = référence normalisée
     tolerance_globale_pct: float
+    tarifs: dict[str, list[dict]] = field(default_factory=dict)  # prix TARIF, clé = code de base ("531731")
+    remises: dict[str, float] = field(default_factory=dict)      # famille -> remise % (règles REMISE_*)
 
 
 # --- Utilitaires ---------------------------------------------------------------
@@ -57,7 +61,7 @@ def ref_de_base(ref: str | None) -> str:
 
 
 def trouver_prix_reference(ref: str | None, ctx: Contexte) -> dict | None:
-    """Correspondance exacte d'abord, puis sur le code de base."""
+    """Prix net : correspondance exacte d'abord, puis sur le code de base."""
     exact = ctx.prix_references.get(normaliser_ref(ref))
     if exact:
         return exact
@@ -66,6 +70,80 @@ def trouver_prix_reference(ref: str | None, ctx: Contexte) -> dict | None:
         if ref_de_base(cle) == base:
             return prix
     return None
+
+
+# --- Tarif FFR ---------------------------------------------------------------------
+# Format des articles du tarif : "531.731F.51.A" = code 531.731, finition 51 (ZM), indice A.
+# Dans les devis, le même article apparaît sous la forme "531.731 ZM" : on rapproche par le
+# code de base (6 chiffres) puis par la finition.
+
+_RE_CODE_6 = re.compile(r"^(\d{3})\.?(\d{3})")
+_RE_CODE_F = re.compile(r"^(F\d{2})\.?(\d{4})")
+# Mot présent dans la référence ou la désignation du devis -> code finition du tarif
+FINITIONS = {"ZM": "51", "GF": "62", "INOX": "62", "CRNI": "62"}
+
+
+def code_base(ref: str | None) -> str:
+    """'531.731 ZM' / '531.731F.51.A' / '531731' -> '531731' ; 'F15.1031.50.A' -> 'F151031'."""
+    texte = normaliser_ref(ref)
+    for motif in (_RE_CODE_6, _RE_CODE_F):
+        m = motif.match(texte)
+        if m:
+            return m.group(1) + m.group(2)
+    return re.sub(r"[^0-9A-Z]", "", ref_de_base(texte))
+
+
+def finition_tarif(article: str) -> str | None:
+    """'531.731F.51.A' -> '51' ; '907.662F.ND.A' -> 'ND'."""
+    m = re.search(r"F\.?([0-9A-Z]{2})\.?[A-Z]$", normaliser_ref(article))
+    return m.group(1) if m else None
+
+
+def trouver_tarif(ligne: dict, ctx: Contexte) -> tuple[dict | None, bool]:
+    """
+    Renvoie (article du tarif, variante_supposee).
+    Plusieurs variantes pour un même code (brut 50, ZM 51, inox 62...) : on choisit celle
+    indiquée par la référence/désignation du devis ; à défaut la finition 50, signalée comme supposée.
+    """
+    candidats = ctx.tarifs.get(code_base(ligne.get("reference")), [])
+    if len(candidats) <= 1:
+        return (candidats[0] if candidats else None), False
+    texte = f"{ligne.get('reference') or ''} {ligne.get('designation') or ''}".upper()
+    for mot, code in FINITIONS.items():
+        if re.search(rf"\b{mot}\b", texte):
+            for c in candidats:
+                if finition_tarif(c["reference_produit"]) == code:
+                    return c, False
+    defaut = next((c for c in candidats if finition_tarif(c["reference_produit"]) == "50"), candidats[0])
+    return defaut, True
+
+
+def taille_uv(ligne: dict) -> float | None:
+    """Nombre d'unités par unité de vente lu dans le devis : 'UV 25 m', '2 UV á 25 m' -> 25."""
+    for texte in (ligne.get("conditionnement"), ligne.get("quantite_texte")):
+        m = re.search(r"UV\s*(?:á|à|a|de)?\s*([0-9]+(?:[.,][0-9]+)?)", texte or "", re.IGNORECASE)
+        if m:
+            return float(m.group(1).replace(",", "."))
+    return None
+
+
+def prix_unitaire_tarif(tarif: dict, ligne: dict, famille: str) -> tuple[float, str]:
+    """
+    Ramène le prix tarif à l'unité du devis (m ou pce). Renvoie (prix, explication).
+    - Profilés : tarif au mètre.
+    - Sinon, "tarif_par" connu (appris d'un devis validé) -> appliqué.
+    - Sinon, déduction : un tarif par UV divisé par la taille de l'UV reste supérieur au prix net ;
+      un tarif à l'unité divisé par l'UV tombe nettement en dessous.
+    """
+    prix = tarif["prix_reference"]
+    uv = tarif.get("taille_uv") or taille_uv(ligne)
+    if famille == "profile" or tarif.get("tarif_par") == "unite" or not uv or uv <= 1:
+        return prix, "tarif à l'unité"
+    if tarif.get("tarif_par") == "uv":
+        return prix / uv, f"tarif par UV de {uv:g}"
+    if prix / uv >= (ligne.get("prix_unitaire") or 0):
+        return prix / uv, f"tarif par UV de {uv:g} (déduit)"
+    return prix, "tarif à l'unité (déduit)"
 
 
 def _lignes_matiere(donnees: dict) -> list[dict]:
@@ -149,22 +227,70 @@ def ctrl_somme_positions(donnees: dict, regle: dict, ctx: Contexte) -> list[Anom
     return []
 
 
+def _probleme_prix(element: dict) -> str | None:
+    """'à zéro', 'manquant' ou None si le prix unitaire et le total sont renseignés et non nuls."""
+    valeurs = (element.get("prix_unitaire"), element.get("total"))
+    if any(v == 0 for v in valeurs):
+        return "prix à zéro"
+    if any(v is None for v in valeurs):
+        return "prix manquant" + (" ou illisible" if element.get("a_verifier") else "")
+    return None
+
+
 def ctrl_prix_nul(donnees: dict, regle: dict, ctx: Contexte) -> list[AnomalieDetectee]:
     anomalies = []
     for p in _positions(donnees):
-        if p.get("prix_unitaire") == 0 or p.get("total") == 0:
+        probleme = _probleme_prix(p)
+        if probleme:
             anomalies.append(_anomalie(
-                regle, f"Position {p.get('numero')} : prix à zéro.",
-                famille="offre", valeur_trouvee=0, texte_source=p.get("texte_source"),
+                regle, f"Position {p.get('numero')} : {probleme}.",
+                famille="offre", valeur_trouvee=p.get("prix_unitaire"), texte_source=p.get("texte_source"),
             ))
     for ligne in _lignes_matiere(donnees):
-        if ligne.get("prix_unitaire") == 0 or ligne.get("total") == 0:
+        probleme = _probleme_prix(ligne)
+        if probleme:
             anomalies.append(_anomalie(
-                regle, f"Article {ligne.get('reference')} ({ligne.get('designation')}) : prix à zéro.",
+                regle, f"Article {ligne.get('reference')} ({ligne.get('designation')}) : {probleme}.",
                 famille=ligne.get("famille", regle["famille"]), reference_produit=ligne.get("reference"),
-                valeur_trouvee=0, texte_source=ligne.get("texte_source"),
+                valeur_trouvee=ligne.get("prix_unitaire"), texte_source=ligne.get("texte_source"),
             ))
     return anomalies
+
+
+def _comparer_au_tarif(ligne: dict, regle: dict, ctx: Contexte) -> AnomalieDetectee | None:
+    """Compare un prix du devis au tarif FFR remisé. None si conforme ; lève LookupError si article absent du tarif."""
+    tarif, variante_supposee = trouver_tarif(ligne, ctx)
+    if tarif is None:
+        raise LookupError
+    prix = ligne["prix_unitaire"]
+    famille = ligne.get("famille") or tarif.get("famille") or "global"
+    if tarif.get("prix_reference") is None:
+        return AnomalieDetectee(
+            nature="ecart", type="prix", famille=famille, gravite="info",
+            message=f"Article {ligne.get('reference')} : prix « sur demande » au tarif ({tarif['reference_produit']}), contrôle impossible.",
+            code_regle=regle.get("code"), regle_id=regle.get("id"),
+            reference_produit=ligne.get("reference"), valeur_trouvee=prix, texte_source=ligne.get("texte_source"),
+        )
+    if not (regle.get("condition") or {}).get("comparer_tarif", True):
+        return None  # article présent au tarif avec un prix : suffisant tant que les remises ne sont pas validées
+    prix_tarif, explication = prix_unitaire_tarif(tarif, ligne, famille)
+    remise = ctx.remises.get(famille, 0.0)
+    attendu = round(prix_tarif * (1 - remise / 100), 4)
+    tolerance = tarif.get("tolerance_pct") or regle.get("seuil") or ctx.tolerance_globale_pct
+    ecart = _pct(prix, attendu)
+    if ecart is None or abs(ecart) <= tolerance:
+        return None
+    sens = "au-dessus" if ecart > 0 else "en dessous"
+    detail = f"tarif {tarif['reference_produit']} {tarif['prix_reference']:.2f} €, {explication}, remise {remise:g} %"
+    if variante_supposee:
+        detail += ", variante supposée : finition non précisée dans le devis"
+    return _anomalie(
+        regle,
+        (f"Article {ligne.get('reference')} : {prix:.2f} € soit {abs(ecart):.1f} % {sens} du prix attendu "
+         f"{attendu:.2f} € ({detail} ; tolérance {tolerance:g} %)."),
+        famille=famille, reference_produit=ligne.get("reference"),
+        valeur_trouvee=prix, valeur_attendue=attendu, ecart_pct=ecart, texte_source=ligne.get("texte_source"),
+    )
 
 
 def ctrl_ecart_prix_reference(donnees: dict, regle: dict, ctx: Contexte) -> list[AnomalieDetectee]:
@@ -175,10 +301,18 @@ def ctrl_ecart_prix_reference(donnees: dict, regle: dict, ctx: Contexte) -> list
             continue
         ref = trouver_prix_reference(ligne.get("reference"), ctx)
         if ref is None:
+            # Pas de prix net connu : comparaison au tarif FFR remisé
+            try:
+                anomalie = _comparer_au_tarif(ligne, regle, ctx)
+                if anomalie:
+                    anomalies.append(anomalie)
+                continue
+            except LookupError:
+                pass  # absent du tarif aussi -> proposition de prix ci-dessous
             # Apprentissage des prix : référence inconnue -> proposition à valider
             anomalies.append(AnomalieDetectee(
                 nature="proposition_prix", type="prix", famille=ligne.get("famille", "global"), gravite="info",
-                message=(f"Article {ligne.get('reference')} ({ligne.get('designation')}) inconnu de la base : "
+                message=(f"Article {ligne.get('reference')} ({ligne.get('designation')}) absent du tarif et de la base : "
                          f"ajouter {prix:.2f} € / {ligne.get('unite_prix') or '?'} comme prix de référence ?"),
                 code_regle=regle.get("code"), regle_id=regle.get("id"),
                 reference_produit=ligne.get("reference"), valeur_trouvee=prix,
@@ -389,15 +523,25 @@ def comparer(
     prix_references  : prix ACTIFS (dict avec reference_produit, prix_reference, tolerance_pct...)
     familles         : filtre métier optionnel (ex. ["profile", "joint"]) ; None = tout
     """
+    tarifs: dict[str, list[dict]] = defaultdict(list)
+    nets: dict[str, dict] = {}
+    for p in prix_references:
+        if p.get("type_prix", "net") == "tarif":
+            tarifs[code_base(p["reference_produit"])].append(p)
+        elif p.get("prix_reference") is not None:
+            nets[normaliser_ref(p["reference_produit"])] = p
     ctx = Contexte(
-        prix_references={normaliser_ref(p["reference_produit"]): p for p in prix_references},
+        prix_references=nets,
         tolerance_globale_pct=tolerance_globale_pct,
+        tarifs=dict(tarifs),
+        remises={r["famille"]: float(r["seuil"] or 0) for r in regles
+                 if (r.get("condition") or {}).get("controle") == "remise_tarif"},
     )
     anomalies: list[AnomalieDetectee] = []
     for regle in regles:
         nom = (regle.get("condition") or {}).get("controle")
-        if nom == "consigne_ia":
-            continue  # transmise à Claude dans le prompt, pas évaluée ici
+        if nom in ("consigne_ia", "remise_tarif"):
+            continue  # consigne : transmise à Claude ; remise : paramètre lu par ECART_PRIX_REF
         controle = CONTROLES.get(nom)
         if controle is None:
             logger.warning("Règle %s : contrôle '%s' inconnu, ignorée.", regle.get("code"), nom)

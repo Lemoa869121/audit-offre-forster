@@ -108,18 +108,30 @@ class Rule(Base):
 
 
 class PriceReference(Base):
-    """Prix de référence d'un article. Même logique de versions que les règles."""
+    """
+    Prix de référence d'un article. Même logique de versions que les règles.
+
+    Deux types de prix (champ type_prix) :
+    - "net"   : prix net observé dans un devis validé (ex. "531.731 ZM" à 31,14 €/m).
+                Prioritaire : c'est le prix réellement pratiqué.
+    - "tarif" : prix public du tarif fournisseur (ex. "531.731F.51.A" à 47,90 €), auquel
+                le moteur applique la remise de la famille (règles REMISE_*).
+                Le prix tarif peut être exprimé par unité (m, pce) ou par unité de vente (UV).
+    """
     __tablename__ = "price_references"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     utilisateur_id: Mapped[str] = mapped_column(String(64), default=UTILISATEUR_PAR_DEFAUT, index=True)
 
-    reference_produit: Mapped[str] = mapped_column(String(64), index=True)  # ex. "531.731 ZM", "907662"
+    type_prix: Mapped[str] = mapped_column(String(8), default="net", index=True)   # "net" | "tarif"
+    reference_produit: Mapped[str] = mapped_column(String(64), index=True)  # ex. "531.731 ZM" (net), "531.731F.51.A" (tarif)
     designation: Mapped[str | None] = mapped_column(String(255), nullable=True)
     famille: Mapped[Famille] = mapped_column(Enum(Famille))
-    prix_reference: Mapped[float] = mapped_column(Float)          # € HT
-    unite: Mapped[str] = mapped_column(String(16))                # "m", "pce"
+    prix_reference: Mapped[float | None] = mapped_column(Float, nullable=True)  # € HT ; None = "sur demande"
+    unite: Mapped[str] = mapped_column(String(16))                # "m", "pce", "UV"
     conditionnement: Mapped[str | None] = mapped_column(String(64), nullable=True)  # ex. "UV 25 m", "barre 6 m"
+    tarif_par: Mapped[str | None] = mapped_column(String(8), nullable=True)   # tarif : "unite" | "uv" | None (déduit)
+    taille_uv: Mapped[float | None] = mapped_column(Float, nullable=True)     # tarif : nb d'unités par UV si connu
     tolerance_pct: Mapped[float | None] = mapped_column(Float, nullable=True)       # None -> seuil global
 
     statut: Mapped[Statut] = mapped_column(Enum(Statut), default=Statut.actif, index=True)
