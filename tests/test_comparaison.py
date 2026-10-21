@@ -386,3 +386,57 @@ def test_rc4_equivaut_a_cr4():
     donnees = copy.deepcopy(FIXTURE_CR4)
     donnees["offre"]["positions"][0]["classements"] = ["FB6", "RC4"]
     assert len(_cr4("KIT_CR4", donnees)) == 2  # kit CR4 appliqué
+
+
+# --- Offre modifiée 2026-XAG-00525 : C1, C2, C3, C6 ------------------------------------
+
+def _offre_modifiee():
+    d = copy.deepcopy(FIXTURE_CR4)
+    p = d["offre"]["positions"][0]
+    p["ferrures_listees"] = ["1 x FFR.306F.ND.A Gâche médiane serrure ISEO DIN G", "1 x FFR.298F.ND.A Serrure ISEO DIN G",
+                             "2 x FFR.294F.ND.A Gâche serrure ISEO point haut et bas", "4 x 907662"]
+    p["articles_complementaires"] = ["7 x 983302, 2320 mm", "1 x FFR103FND, 25000 mm", "2 x 985301_25, 25000 mm"]
+    p["hors_lot"] = [{"texte": "Cylindre", "reference_facturee": None}]
+    p["antipanique"], p["hauteur_max_pv_mm"] = False, 3240.0
+    return d
+
+
+def test_c1_article_liste_absent_de_la_matiere():
+    a = _cr4("LISTE_VS_MATIERE", _offre_modifiee())
+    # FFR.306 et 985301_25 absents ; FFR.298 et FFR.294 : la fixture a FFR.297/FFR.294 -> FFR.298 absent aussi
+    assert sorted(x.reference_produit for x in a) == ["985301_25", "FFR.298F.ND.A", "FFR.306F.ND.A"]
+
+
+def test_c1_article_hors_lot_non_signale():
+    d = _offre_modifiee()
+    d["offre"]["positions"][0]["hors_lot"].append({"texte": "Serrure ISEO (hors lot)", "reference_facturee": "FFR.298F.ND.A"})
+    assert "FFR.298F.ND.A" not in [x.reference_produit for x in _cr4("LISTE_VS_MATIERE", d)]
+
+
+def test_c2_exit_exige_seulement_si_antipanique():
+    d = _offre_modifiee()
+    assert _cr4("SERRURE_EXIT_ANTIPANIQUE", d) == []
+    d["offre"]["positions"][0]["antipanique"] = True
+    a = _cr4("SERRURE_EXIT_ANTIPANIQUE", d)
+    assert len(a) == 1 and "Exit" in a[0].message
+
+
+def test_c3_acier_hors_tarif_a_zero_simple_rappel():
+    d = _offre_modifiee()  # FL 35X5 n'est plus cité hors lot
+    anomalies, _ = comparer(d, [_regle("PRIX_NUL")], TARIF)  # tarif chargé, FL 35X5 et Z-999 hors tarif
+    gravites = {a.reference_produit: a.gravite for a in anomalies}
+    assert gravites == {"FL 35X5": "info", "Z-999": "info"}  # RR15/20/2 : motif tube RR, non signalé
+
+
+def test_c3_article_au_tarif_a_zero_reste_une_erreur():
+    d = {"analyse_matiere": {"lignes": [{"famille": "profile", "reference": "531.731 ZM", "designation": "UNICO",
+                                        "prix_unitaire": 0.0, "total": 0.0}]}}
+    anomalies, _ = comparer(d, [_regle("PRIX_NUL")], TARIF)
+    assert len(anomalies) == 1 and anomalies[0].gravite == "erreur"
+
+
+def test_c6_hauteur_max_pv():
+    d = _offre_modifiee()
+    assert _cr4("HAUTEUR_MAX_PV", d) == []  # 2300 <= 3240
+    d["offre"]["positions"][0]["hauteur_mm"] = 3300
+    assert _cr4("HAUTEUR_MAX_PV", d)[0].valeur_attendue == 3240

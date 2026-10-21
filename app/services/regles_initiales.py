@@ -10,6 +10,7 @@ c'est l'historique qui explique pourquoi elles n'existent plus.
 
 SOURCE = "2026-XAG-01076 (validation du 16/10/2026)"
 SOURCE_2 = "2026-XAG-00525 (validation du 21/10/2026)"
+SOURCE_3 = "2026-XAG-00525 offre modifiée (validation du 21/10/2026)"
 
 CLASSES_SECURITE = ["CR4", "FB6"]
 MOTIF_TUBE_RR = r"^RR\d+/20/2$"  # tube acier RR <profondeur>/20/2, toujours fourni par le métallier
@@ -25,11 +26,12 @@ REGLES_INITIALES: list[dict] = [
     },
     {
         "code": "PRIX_NUL",
-        "description": "Chaque article doit avoir un prix : aucun prix unitaire ni total manquant ou à zéro (offre et analyse matière).",
+        "description": ("Chaque article doit avoir un prix : aucun prix unitaire ni total manquant ou à zéro (offre et analyse matière). "
+                        "0 € accepté pour un article hors lot ; article hors tarif à 0 € non listé hors lot : simple rappel."),
         "type": "prix", "famille": "global", "gravite": "erreur",
         "condition": {"controle": "prix_nul", "motifs_hors_lot": [MOTIF_TUBE_RR]},
         "source": SOURCE_2,
-        "motif_changement": "B2/B15 : un article hors lot (fourni par le métallier) peut être à 0 €.",
+        "motif_changement": "B2/B15 : un article hors lot peut être à 0 €. C3 : article hors tarif à 0 € non listé hors lot -> simple rappel.",
         "seuil": None,
     },
     {
@@ -236,6 +238,51 @@ REGLES_INITIALES: list[dict] = [
                       "indique « panneau épaisseur 57 mm » : ne pas signaler cet écart."),
         },
         "seuil": None, "source": SOURCE_2,
+    },
+    # --- Règles apprises sur l'offre modifiée 2026-XAG-00525 ------------------------------
+    {
+        "code": "LISTE_VS_MATIERE",
+        "description": "Tout article cité dans « Ferrures de fenêtre » ou « Article complémentaire » doit figurer dans l'analyse matière, sauf s'il est hors lot.",
+        "type": "etude", "famille": "offre", "gravite": "erreur",
+        "condition": {"controle": "liste_vs_matiere"},
+        "seuil": None, "source": SOURCE_3,
+    },
+    {
+        "code": "SERRURE_EXIT_ANTIPANIQUE",
+        "description": "Porte antipanique : serrure ISEO en version « Exit ».",
+        "type": "etude", "famille": "ferrure", "gravite": "erreur",
+        "condition": {"controle": "serrure_antipanique", "mot_serrure": "ISEO"},
+        "seuil": None, "source": SOURCE_3,
+    },
+    {
+        "code": "CONSIGNE_EXIT_TEXTE_GENERAL",
+        "description": "La mention « Exit » des rapports de conformité ne concerne que les portes antipanique (texte souvent général).",
+        "type": "etude", "famille": "ferrure", "gravite": "info",
+        "condition": {
+            "controle": "consigne_ia", "sens": "ignorer",
+            "texte": ("Les serrures « Exit » citées par les rapports de conformité ne sont exigées que pour une porte "
+                      "antipanique ; le texte est souvent général : ne pas signaler une serrure non Exit sur une porte non antipanique."),
+        },
+        "seuil": None, "source": SOURCE_3,
+    },
+    {
+        "code": "CONSIGNE_TEXTE_VS_CHIFFRAGE",
+        "description": "Signaler les incohérences entre le texte descriptif et les articles chiffrés (l'erreur est le plus souvent dans le texte).",
+        "type": "etude", "famille": "offre", "gravite": "info",
+        "condition": {
+            "controle": "consigne_ia", "sens": "signaler",
+            "texte": ("Compare le texte descriptif (Inclus dans l'offre, Quincailleries, Configurations) aux articles chiffrés et "
+                      "signale chaque incohérence dans observations (gravite \"alerte\"), en précisant que c'est le texte qui est "
+                      "probablement à corriger (ex. crémone « haut + bas » annoncée, seule la tringle basse chiffrée)."),
+        },
+        "seuil": None, "source": SOURCE_3,
+    },
+    {
+        "code": "HAUTEUR_MAX_PV",
+        "description": "La hauteur du châssis ne doit pas dépasser la hauteur maximale du rapport d'essai.",
+        "type": "etude", "famille": "offre", "gravite": "erreur",
+        "condition": {"controle": "hauteur_max_pv"},
+        "seuil": None, "source": SOURCE_3,
     },
     # --- Règles proposées puis rejetées (historique) ----------------------------
     {

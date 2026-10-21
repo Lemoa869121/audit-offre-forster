@@ -234,7 +234,7 @@ def _anomalie(regle: dict, message: str, **champs) -> AnomalieDetectee:
         nature="ecart",
         type=regle["type"],
         famille=champs.pop("famille", regle["famille"]),
-        gravite=regle.get("gravite", "erreur"),
+        gravite=champs.pop("gravite", regle.get("gravite", "erreur")),
         message=message,
         code_regle=regle.get("code"),
         regle_id=regle.get("id"),
@@ -290,11 +290,16 @@ def ctrl_prix_nul(donnees: dict, regle: dict, ctx: Contexte) -> list[AnomalieDet
         probleme = _probleme_prix(ligne)
         if probleme == "prix à zéro" and est_hors_lot(ligne, donnees, motifs_hors_lot):
             continue  # article hors lot (fourni par le métallier) : prix à zéro normal
-        if probleme == "prix à zéro":
-            probleme += " et article absent de la liste « Fourniture hors lot »"
+        gravite = regle.get("gravite", "erreur")
+        if probleme == "prix à zéro" and ctx.tarifs and trouver_tarif(ligne, ctx)[0] is None:
+            # Article hors tarif à 0 € (acier fourni par le métallier en général) : simple rappel (C3)
+            gravite = "info"
+            probleme = "prix à zéro, article hors tarif : rappel, vérifier qu'il figure dans la liste « Fourniture hors lot »"
+        elif probleme == "prix à zéro":
+            probleme += " (article au tarif, absent de la liste « Fourniture hors lot »)"
         if probleme:
             anomalies.append(_anomalie(
-                regle, f"Article {ligne.get('reference')} ({ligne.get('designation')}) : {probleme}.",
+                regle, f"Article {ligne.get('reference')} ({ligne.get('designation')}) : {probleme}.", gravite=gravite,
                 famille=ligne.get("famille", regle["famille"]), reference_produit=ligne.get("reference"),
                 valeur_trouvee=ligne.get("prix_unitaire"), texte_source=ligne.get("texte_source"),
             ))
@@ -746,7 +751,70 @@ def ctrl_barres_profiles(donnees: dict, regle: dict, ctx: Contexte) -> list[Anom
     return anomalies
 
 
+# --- Contrôles appris sur l'offre modifiée 2026-XAG-00525 ----------------------------
+
+_RE_ARTICLE_LISTE = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*x\s*([A-Z0-9][A-Z0-9._/\-]*)", re.IGNORECASE)
+
+
+def ctrl_liste_vs_matiere(donnees: dict, regle: dict, ctx: Contexte) -> list[AnomalieDetectee]:
+    """Articles cités dans « Ferrures de fenêtre » / « Article complémentaire » : présents dans l'analyse matière, sauf hors lot."""
+    codes_matiere = {code_base(l.get("reference")) for l in _lignes_matiere(donnees)}
+    hors_lot = references_hors_lot(donnees)
+    anomalies = []
+    for p in _positions(donnees):
+        for champ, rubrique in (("ferrures_listees", "Ferrures de fenêtre"), ("articles_complementaires", "Article complémentaire")):
+            for texte in p.get(champ) or []:
+                m = _RE_ARTICLE_LISTE.match(texte)
+                if not m:
+                    continue
+                code = code_base(m.group(2))
+                if code in codes_matiere or code in hors_lot:
+                    continue
+                anomalies.append(_anomalie(
+                    regle,
+                    (f"Position {p.get('numero')} : {m.group(2)} cité dans « {rubrique} » ({texte.strip()}) mais absent de "
+                     f"l'analyse matière : article non chiffré, ou à indiquer hors lot."),
+                    reference_produit=m.group(2), texte_source=texte,
+                ))
+    return anomalies
+
+
+def ctrl_serrure_antipanique(donnees: dict, regle: dict, ctx: Contexte) -> list[AnomalieDetectee]:
+    """Porte antipanique : la serrure ISEO doit être une version « Exit » (inutile sinon, le texte est parfois général)."""
+    if not any(p.get("antipanique") for p in _positions(donnees)):
+        return []
+    mot = (regle["condition"].get("mot_serrure") or "ISEO").lower()
+    anomalies = []
+    for ligne in _lignes_matiere(donnees):
+        designation = (ligne.get("designation") or "").lower()
+        if mot not in designation or "serrure" not in designation or re.search(r"g[âa]che", designation):
+            continue
+        tarif, _ = trouver_tarif(ligne, ctx)
+        if "exit" not in designation and "exit" not in ((tarif or {}).get("designation") or "").lower():
+            anomalies.append(_anomalie(
+                regle, f"Porte antipanique : la serrure {ligne.get('reference')} ({ligne.get('designation')}) n'est pas une version « Exit ».",
+                reference_produit=ligne.get("reference"), texte_source=ligne.get("texte_source"),
+            ))
+    return anomalies
+
+
+def ctrl_hauteur_max_pv(donnees: dict, regle: dict, ctx: Contexte) -> list[AnomalieDetectee]:
+    """Hauteur du châssis ≤ hauteur maximale admise par le rapport d'essai."""
+    anomalies = []
+    for p in _positions(donnees):
+        hauteur, maximum = p.get("hauteur_mm"), p.get("hauteur_max_pv_mm")
+        if hauteur and maximum and hauteur > maximum:
+            anomalies.append(_anomalie(
+                regle, f"Position {p.get('numero')} : hauteur {hauteur:g} mm supérieure au maximum du rapport d'essai ({maximum:g} mm).",
+                valeur_trouvee=hauteur, valeur_attendue=maximum, ecart_pct=_pct(hauteur, maximum), texte_source=p.get("texte_source"),
+            ))
+    return anomalies
+
+
 CONTROLES: dict[str, Callable[[dict, dict, Contexte], list[AnomalieDetectee]]] = {
+    "liste_vs_matiere": ctrl_liste_vs_matiere,
+    "serrure_antipanique": ctrl_serrure_antipanique,
+    "hauteur_max_pv": ctrl_hauteur_max_pv,
     "gaches_par_serrure": ctrl_gaches_par_serrure,
     "kit_classement": ctrl_kit_classement,
     "coherence_din": ctrl_coherence_din,

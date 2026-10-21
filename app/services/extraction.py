@@ -50,7 +50,7 @@ class ErreurExtraction(Exception):
 CHAMPS_NUMERIQUES = {
     "valeur", "quantite", "largeur_mm", "hauteur_mm", "prix_unitaire", "total",
     "quantite_commandee", "besoin", "surface_m2", "perimetre_m", "somme_surface_m2", "somme_perimetre_m",
-    "nb_vantaux_bloc",
+    "nb_vantaux_bloc", "hauteur_max_pv_mm",
 }
 
 
@@ -125,6 +125,9 @@ SCHEMA_EXTRACTION = _objet({
             "sens_ouverture_bloc": {"type": "string", "enum": SENS},
             "din": {"type": "string", "enum": DIN},
             "ferrures_listees": {"type": "array", "items": {"type": "string"}},
+            "articles_complementaires": {"type": "array", "items": {"type": "string"}},
+            "antipanique": {"type": "boolean"},
+            "hauteur_max_pv_mm": _nullable("number"),
             "hors_lot": {"type": "array", "items": _objet({
                 "texte": {"type": "string"},
                 "reference_facturee": {"type": "string"},
@@ -223,6 +226,9 @@ Portes de sécurité et bloc descriptif (texte en couleur sous la description) :
 - sens_ouverture_bloc : sens écrit dans le bloc descriptif ("Ouverture intérieure" -> "interieur"), sinon "".
 - din : sens DIN de la porte ("DIN G" -> "G", "DIN D" -> "D"), sinon "".
 - ferrures_listees : lignes de la rubrique "Ferrures de fenêtre" de la position, telles qu'écrites.
+- articles_complementaires : lignes de la rubrique "Article complémentaire", telles qu'écrites (ex. "6 x 983302, 2320 mm").
+- antipanique : true seulement si la porte chiffrée est antipanique (pas une simple mention générale dans un rapport).
+- hauteur_max_pv_mm : hauteur maximale de la porte indiquée par le rapport d'essai (ex. "Hauteur max 3240mm" -> "3240"), sinon "".
 - hors_lot : chaque élément de la liste "Fourniture hors lot" (texte tel qu'écrit) ; reference_facturee = la référence de l'analyse matière qui correspond à cet élément (ex. "Adhésif TESA ACX+" -> la bande TESA ; "plat acier 35x5" -> "FL 35X5"), sinon "".
 Analyse matière :
 - din : "D" ou "G" si la désignation précise un sens (ex. "DIN D", "Droite", "porte droite"), sinon "".
