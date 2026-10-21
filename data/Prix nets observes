@@ -1,0 +1,182 @@
+[
+ {
+  "reference_produit": "531.731 ZM",
+  "designation": "Forster UNICO, Acier Zinc-Magnésium",
+  "famille": "profile",
+  "prix_reference": 31.14,
+  "unite": "m",
+  "conditionnement": "barre 6 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "531.755 ZM",
+  "designation": "Forster UNICO, Acier Zinc-Magnésium",
+  "famille": "profile",
+  "prix_reference": 38.66,
+  "unite": "m",
+  "conditionnement": "barre 6 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "533.731 ZM",
+  "designation": "Forster UNICO, Acier Zinc-Magnésium",
+  "famille": "profile",
+  "prix_reference": 33.96,
+  "unite": "m",
+  "conditionnement": "barre 6 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "533.752 ZM",
+  "designation": "Forster UNICO, Acier Zinc-Magnésium",
+  "famille": "profile",
+  "prix_reference": 37.75,
+  "unite": "m",
+  "conditionnement": "barre 6 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "901327",
+  "designation": "Parclose aluminium",
+  "famille": "profile",
+  "prix_reference": 4.39,
+  "unite": "m",
+  "conditionnement": "barre 6 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "907662",
+  "designation": "paumelle à souder",
+  "famille": "ferrure",
+  "prix_reference": 21.99,
+  "unite": "pce",
+  "conditionnement": "UV 2 pce",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "987009",
+  "designation": "gâche",
+  "famille": "ferrure",
+  "prix_reference": 13.55,
+  "unite": "pce",
+  "conditionnement": "pce",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "987071",
+  "designation": "attache",
+  "famille": "ferrure",
+  "prix_reference": 1.3,
+  "unite": "pce",
+  "conditionnement": "UV 10 pce",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "900100",
+  "designation": "douilles d'écoulement",
+  "famille": "accessoire",
+  "prix_reference": 0.85,
+  "unite": "pce",
+  "conditionnement": "UV 10 pce",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "906579",
+  "designation": "boutons autotaraudeurs",
+  "famille": "accessoire",
+  "prix_reference": 0.22,
+  "unite": "pce",
+  "conditionnement": "UV 200 pce",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "907340",
+  "designation": "standard door handle shaft, nut spindle 9 mm, L=149 mm",
+  "famille": "accessoire",
+  "prix_reference": 4.28,
+  "unite": "pce",
+  "conditionnement": "pce",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "986702",
+  "designation": "pont feuillure pour verre, large",
+  "famille": "accessoire",
+  "prix_reference": 3.12,
+  "unite": "pce",
+  "conditionnement": "UV 12 pce",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "987081",
+  "designation": "plaque de fixation RC/E30/EW30",
+  "famille": "accessoire",
+  "prix_reference": 2.66,
+  "unite": "pce",
+  "conditionnement": "UV 10 pce",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "905386_25",
+  "designation": "joint de vitrage intérieur 7-8",
+  "famille": "joint",
+  "prix_reference": 2.62,
+  "unite": "m",
+  "conditionnement": "UV 25 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "985301_25",
+  "designation": "Joint EPDM rouleau 25m FFR.012F",
+  "famille": "joint",
+  "prix_reference": 1.55,
+  "unite": "m",
+  "conditionnement": "UV 25 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "985302_25",
+  "designation": "Joint EPDM rouleau 25m FFR.013F",
+  "famille": "joint",
+  "prix_reference": 3.36,
+  "unite": "m",
+  "conditionnement": "UV 25 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "985304_25",
+  "designation": "recouvrement de feuillure EPDM",
+  "famille": "joint",
+  "prix_reference": 1.75,
+  "unite": "m",
+  "conditionnement": "UV 25 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "985305_34",
+  "designation": "Joint EPDM rouleau 34m FFR.016F",
+  "famille": "joint",
+  "prix_reference": 1.75,
+  "unite": "m",
+  "conditionnement": "UV 34 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "988001",
+  "designation": "ruban d'étanchéité de feuillure",
+  "famille": "joint",
+  "prix_reference": 0.48,
+  "unite": "m",
+  "conditionnement": "UV 100 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ },
+ {
+  "reference_produit": "988051",
+  "designation": "ruban d'étanchéité de feuillure",
+  "famille": "joint",
+  "prix_reference": 1.31,
+  "unite": "m",
+  "conditionnement": "UV 60 m",
+  "source": "2026-XAG-01076 (16/10/2026)"
+ }
+]
