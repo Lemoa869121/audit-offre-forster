@@ -212,6 +212,7 @@ def test_code_base_devis_et_tarif():
     assert code_base("531.731 ZM") == code_base("531.731F.51.A") == "531731"
     assert code_base("905386_25") == code_base("905.386F.ND.A") == "905386"
     assert code_base("F15.1031.50.A") == "F151031"
+    assert code_base("FFR102FND") == code_base("FFR.102F.ND.A") == "FFR102"
 
 
 def test_taille_uv():
@@ -272,3 +273,109 @@ def test_import_tarif():
     assert len(articles) == 3 and stats["doublons"] == 1 and stats["sur_demande"] == 1
     assert [a["famille"] for a in articles] == ["profile", "joint", "profile"]
     assert lire_prix("1 068,72 €") == 1068.72
+
+
+# --- Porte CR4 / FB6 (règles apprises sur le devis 2026-XAG-00525) ----------------------
+
+FIXTURE_CR4 = json.loads((Path(__file__).parent / "fixtures" / "extraction_cr4_fictive.json").read_text(encoding="utf-8"))
+TARIF_DIN = [
+    {"type_prix": "tarif", "reference_produit": "FFR.297F.ND.A", "famille": "ferrure", "prix_reference": 419.44, "unite": "pce",
+     "designation": "SERRURE ISEO MULTIBLINDO EASY 1860X24X6 TET.U A35 ENTR. 92 MM D"},
+    {"type_prix": "tarif", "reference_produit": "FFR.298F.ND.A", "famille": "ferrure", "prix_reference": 419.44, "unite": "pce",
+     "designation": "SERRURE ISEO MULTIBLINDO EASY 1860X24X6 TET.U A35 ENTR. 92 MM G"},
+    {"type_prix": "tarif", "reference_produit": "FFR.306F.ND.A", "famille": "ferrure", "prix_reference": 23.89, "unite": "pce",
+     "designation": "Gâche multiblindo centrale DIN Gauche - 033232"},
+    {"type_prix": "tarif", "reference_produit": "FFR.307F.ND.A", "famille": "ferrure", "prix_reference": 23.89, "unite": "pce",
+     "designation": "Gâche multiblindo centrale DIN Droite - 033233"},
+]
+
+
+def _cr4(code, donnees=None, prix=PRIX):
+    anomalies, _ = comparer(donnees or FIXTURE_CR4, [_regle(code)], prix)
+    return [a for a in anomalies if a.nature != "observation_ia"]
+
+
+def test_cr4_prix_zero_accepte_si_hors_lot():
+    # FL 35X5 (cité hors lot) et RR15/20/2 (motif tube RR) acceptés ; Z-999 à 0 € non hors lot -> erreur
+    assert [a.reference_produit for a in _cr4("PRIX_NUL")] == ["Z-999"]
+
+
+def test_cr4_4_paumelles_par_vantail():
+    assert _cr4("PAUMELLES_PAR_VANTAIL") == []  # 8 = 2 vantaux x 4
+    standard = copy.deepcopy(FIXTURE_CR4)
+    standard["offre"]["positions"][0]["classements"] = []
+    assert _cr4("PAUMELLES_PAR_VANTAIL", standard)[0].valeur_attendue == 6
+
+
+def test_cr4_gache_987009_non_exigee_avec_serrure_iseo():
+    assert _cr4("GACHE_PAR_VANTAIL") == []
+
+
+def test_gaches_iseo_3_par_serrure():
+    assert _cr4("GACHES_ISEO") == []  # 1 centrale + 2 haut/bas
+    donnees = copy.deepcopy(FIXTURE_CR4)
+    donnees["analyse_matiere"]["lignes"][9]["besoin"] = 1  # gâches haut/bas : 1 au lieu de 2
+    a = _cr4("GACHES_ISEO", donnees)
+    assert len(a) == 1 and a[0].valeur_trouvee == 2 and a[0].valeur_attendue == 3
+
+
+def test_cr4_axe_poignee_non_exige():
+    assert _cr4("AXE_POIGNEE_PAR_VANTAIL") == []
+
+
+def test_kit_cr4_bequilles_manquantes():
+    manquants = [a.message for a in _cr4("KIT_CR4")]
+    assert len(manquants) == 2 and any("béquilles" in m for m in manquants) and any("plat acier usiné" in m for m in manquants)
+
+
+def test_kit_cr4_ignore_porte_non_classee():
+    donnees = copy.deepcopy(FIXTURE_CR4)
+    donnees["offre"]["positions"][0]["classements"] = ["FB6"]
+    assert _cr4("KIT_CR4", donnees) == []
+
+
+def test_coherence_din_propose_la_bonne_variante():
+    anomalies = _cr4("COHERENCE_DIN", prix=TARIF_DIN)
+    messages = {a.reference_produit: a.message for a in anomalies}
+    assert set(messages) == {"FFR.297F.ND.A", "FFR.307F.ND.A"}  # 985632 (accessoire) non contrôlé
+    assert "FFR.298F.ND.A" in messages["FFR.297F.ND.A"] and "FFR.306F.ND.A" in messages["FFR.307F.ND.A"]
+
+
+def test_configuration_vs_pv():
+    a = _cr4("CONFIG_VS_PV")
+    assert len(a) == 1 and "ATTENTION" in a[0].message and "1 vantail" in a[0].message and "interieur" in a[0].message
+
+
+def test_hors_lot_facture():
+    a = _cr4("HORS_LOT_FACTURE")
+    assert [x.reference_produit for x in a] == ["FFR103FND"]  # FL 35X5 hors lot mais à 0 € : normal
+
+
+def test_renfort_fb6_double():
+    # (6,0 + 9,0 + 6,2) x 2 = 42,4 m attendus, 36,0 trouvés -> -15 % : erreur
+    a = _cr4("RENFORT_FB")
+    assert len(a) == 1 and a[0].valeur_attendue == 42.4
+    donnees = copy.deepcopy(FIXTURE_CR4)
+    donnees["analyse_matiere"]["lignes"][2]["besoin"] = 2.3  # (6 + 9 + 2,3) x 2 = 34,6 -> +4 % : conforme
+    assert _cr4("RENFORT_FB", donnees) == []
+    donnees["offre"]["positions"][0]["classements"] = ["FB4"]  # FB4 : x 1 = 17,3 m attendus
+    assert _cr4("RENFORT_FB", donnees)[0].valeur_attendue == 17.3
+
+
+def test_article_a_remplacer():
+    a = _cr4("ARTICLE_A_REMPLACER")
+    assert len(a) == 1 and "985301" in a[0].message
+
+
+def test_disponibilite_signale_stock_mais_pas_hors_lot():
+    a = _cr4("DISPONIBILITE")
+    assert [x.reference_produit for x in a] == ["975301", "988006"] and all(x.gravite == "info" for x in a)
+
+
+def test_barres_profiles_5_90_utiles():
+    a = _cr4("BARRES_PROFILES")
+    assert [x.reference_produit for x in a] == ["533.753 ZM"] and a[0].valeur_attendue == 2
+
+
+def test_chute_ignore_les_profiles():
+    assert all(a.famille != "profile" for a in _cr4("CHUTE_CONDITIONNEMENT"))

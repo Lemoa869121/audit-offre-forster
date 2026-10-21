@@ -30,20 +30,36 @@ def _famille(valeur: str) -> Famille:
     return Famille.global_ if valeur == "global" else Famille(valeur)
 
 
-def charger_regles(db) -> int:
-    ajoutees = 0
+def charger_regles(db) -> dict:
+    """
+    Règle absente -> créée (version 1).
+    Règle présente et identique -> inchangée.
+    Règle présente mais modifiée dans regles_initiales.py -> version courante archivée,
+    nouvelle version créée avec son motif (jamais d'écrasement).
+    Une règle désactivée manuellement en base n'est pas réactivée.
+    """
+    stats = {"ajoutees": 0, "nouvelles_versions": 0}
     for r in REGLES_INITIALES:
-        if db.scalar(select(Rule).where(Rule.code == r["code"])):
+        versions = db.scalars(select(Rule).where(Rule.code == r["code"]).order_by(Rule.version.desc())).all()
+        courante = versions[0] if versions else None
+        if courante and (courante.description, courante.condition, courante.seuil) == (r["description"], r["condition"], r["seuil"]):
             continue
+        statut = Statut(r.get("statut", "actif"))
+        if courante:
+            if courante.statut == Statut.archive and statut == Statut.actif and not courante.motif_changement:
+                continue  # désactivée à la main : on respecte ce choix
+            courante.statut = Statut.archive
+            stats["nouvelles_versions"] += 1
+        else:
+            stats["ajoutees"] += 1
         db.add(Rule(
-            code=r["code"], version=1, description=r["description"],
+            code=r["code"], version=(courante.version + 1) if courante else 1, description=r["description"],
             type=TypeRegle(r["type"]), famille=_famille(r["famille"]), gravite=Gravite(r["gravite"]),
-            condition=r["condition"], seuil=r["seuil"],
-            statut=Statut(r.get("statut", "actif")), motif_changement=r.get("motif_changement"),
-            source_pdf=SOURCE,
+            condition=r["condition"], seuil=r["seuil"], statut=statut,
+            motif_changement=r.get("motif_changement"), source_pdf=r.get("source", SOURCE),
+            remplace_id=courante.id if courante else None,
         ))
-        ajoutees += 1
-    return ajoutees
+    return stats
 
 
 def _lire_fichier_prix() -> tuple[list[dict], str]:
@@ -85,8 +101,9 @@ def charger_prix(db) -> dict:
 if __name__ == "__main__":
     init_db()
     with SessionLocal() as db:
-        nb_regles = charger_regles(db)
+        r = charger_regles(db)
         s = charger_prix(db)
         db.commit()
-    print(f"{nb_regles} règle(s) ajoutée(s). Prix depuis {s['source']} : {s['ajoutes']} ajouté(s), "
+    print(f"Règles : {r['ajoutees']} ajoutée(s), {r['nouvelles_versions']} nouvelle(s) version(s). "
+          f"Prix depuis {s['source']} : {s['ajoutes']} ajouté(s), "
           f"{s['mis_a_jour']} mis à jour (ancien archivé), {s['inchanges']} inchangé(s).")

@@ -9,6 +9,10 @@ c'est l'historique qui explique pourquoi elles n'existent plus.
 """
 
 SOURCE = "2026-XAG-01076 (validation du 16/10/2026)"
+SOURCE_2 = "2026-XAG-00525 (validation du 21/10/2026)"
+
+CLASSES_SECURITE = ["CR4", "FB6"]
+MOTIF_TUBE_RR = r"^RR\d+/20/2$"  # tube acier RR <profondeur>/20/2, toujours fourni par le métallier
 
 REGLES_INITIALES: list[dict] = [
     # --- Règles actives --------------------------------------------------------
@@ -23,7 +27,9 @@ REGLES_INITIALES: list[dict] = [
         "code": "PRIX_NUL",
         "description": "Chaque article doit avoir un prix : aucun prix unitaire ni total manquant ou à zéro (offre et analyse matière).",
         "type": "prix", "famille": "global", "gravite": "erreur",
-        "condition": {"controle": "prix_nul"},
+        "condition": {"controle": "prix_nul", "motifs_hors_lot": [MOTIF_TUBE_RR]},
+        "source": SOURCE_2,
+        "motif_changement": "B2/B15 : un article hors lot (fourni par le métallier) peut être à 0 €.",
         "seuil": None,
     },
     {
@@ -64,23 +70,31 @@ REGLES_INITIALES: list[dict] = [
     },
     {
         "code": "PAUMELLES_PAR_VANTAIL",
-        "description": "3 paumelles par vantail.",
+        "description": "3 paumelles par vantail (4 par vantail sur une porte CR4/FB6).",
         "type": "etude", "famille": "ferrure", "gravite": "erreur",
-        "condition": {"controle": "quantite_par_vantail", "references": ["907662"], "mots_cles": ["paumelle"]},
+        "condition": {"controle": "quantite_par_vantail", "references": ["907662"], "mots_cles": ["paumelle"],
+                      "classements": CLASSES_SECURITE, "seuil_classe": 4},
+        "source": SOURCE_2,
+        "motif_changement": "B3 : 4 paumelles par vantail est la règle pour une porte CR4/FB6.",
         "seuil": 3,
     },
     {
         "code": "GACHE_PAR_VANTAIL",
-        "description": "1 gâche par vantail.",
+        "description": "1 gâche 987009 par vantail (portes sans serrure ISEO).",
         "type": "etude", "famille": "ferrure", "gravite": "erreur",
-        "condition": {"controle": "quantite_par_vantail", "references": ["987009"], "mots_cles": ["gâche", "gache"]},
+        "condition": {"controle": "quantite_par_vantail", "references": ["987009"], "exclure_si_ferrure": "ISEO"},
+        "source": SOURCE_2,
+        "motif_changement": "B4 : la règle vaut pour la gâche 987009 ; les serrures ISEO ont leur propre règle (GACHES_ISEO).",
         "seuil": 1,
     },
     {
         "code": "AXE_POIGNEE_PAR_VANTAIL",
-        "description": "1 axe (carré) de poignée par vantail.",
+        "description": "1 axe (carré) de poignée par vantail (hors CR4/FB6 : carré fourni par le métallier).",
         "type": "etude", "famille": "accessoire", "gravite": "erreur",
-        "condition": {"controle": "quantite_par_vantail", "references": ["907340"], "mots_cles": ["handle shaft", "carré de poignée"]},
+        "condition": {"controle": "quantite_par_vantail", "references": ["907340"], "mots_cles": ["handle shaft", "carré de poignée"],
+                      "exclure_classements": CLASSES_SECURITE},
+        "source": SOURCE_2,
+        "motif_changement": "B5 : en CR4/FB6 le carré est fourni par le métallier.",
         "seuil": 1,
     },
     {
@@ -122,7 +136,9 @@ REGLES_INITIALES: list[dict] = [
         "code": "CHUTE_CONDITIONNEMENT",
         "description": "Signaler pour information les articles dont la quantité commandée dépasse fortement le besoin (conditionnement).",
         "type": "etude", "famille": "global", "gravite": "info",
-        "condition": {"controle": "chute_conditionnement"},
+        "condition": {"controle": "chute_conditionnement", "exclure_familles": ["profile"]},
+        "source": SOURCE_2,
+        "motif_changement": "B12 : chutes des profilés calculées par le logiciel (barres de 6 m), contrôlées par BARRES_PROFILES.",
         "seuil": 35,  # % de chute
     },
     {
@@ -135,6 +151,91 @@ REGLES_INITIALES: list[dict] = [
             "texte": "La plaque de fixation 987081 (RC/E30/EW30) est normale même en série Standard : ne pas la signaler.",
         },
         "seuil": None,
+    },
+    # --- Règles apprises sur le devis 2026-XAG-00525 (porte CR4 / FB6) -------------------
+    {
+        "code": "GACHES_ISEO",
+        "description": "Serrure ISEO : toujours 3 gâches ISEO (1 centrale, 1 haute, 1 basse) par serrure.",
+        "type": "etude", "famille": "ferrure", "gravite": "erreur",
+        "condition": {"controle": "gaches_par_serrure", "mot_serrure": "ISEO"},
+        "seuil": 3, "source": SOURCE_2,
+    },
+    {
+        "code": "COHERENCE_DIN",
+        "description": "Serrures et gâches dans le même sens DIN que la porte.",
+        "type": "etude", "famille": "ferrure", "gravite": "erreur",
+        "condition": {"controle": "coherence_din", "familles": ["ferrure"]},
+        "seuil": None, "source": SOURCE_2,
+    },
+    {
+        "code": "CONFIG_VS_PV",
+        "description": "Le texte du bloc descriptif (rapport d'essai) doit décrire la porte chiffrée : nombre de vantaux, sens d'ouverture.",
+        "type": "etude", "famille": "offre", "gravite": "erreur",
+        "condition": {"controle": "configuration_vs_pv"},
+        "seuil": None, "source": SOURCE_2,
+    },
+    {
+        "code": "HORS_LOT_FACTURE",
+        "description": "Un élément listé « Fourniture hors lot » ne doit pas être facturé dans l'analyse matière.",
+        "type": "etude", "famille": "offre", "gravite": "erreur",
+        "condition": {"controle": "hors_lot_facture"},
+        "seuil": None, "source": SOURCE_2,
+    },
+    {
+        "code": "KIT_CR4",
+        "description": "Porte CR4 : plat usiné FFR.102, bande TESA FFR.103, renfort FB4 983302, plaque RC 987081, béquilles 907350 et tube acier RR**/20/2.",
+        "type": "etude", "famille": "global", "gravite": "erreur",
+        "condition": {"controle": "kit_classement", "classements": ["CR4"], "articles": [
+            {"libelle": "plat acier usiné CR4", "references": ["FFR.102"]},
+            {"libelle": "bande adhésive TESA ACX+", "references": ["FFR.103"]},
+            {"libelle": "renfort FB4", "references": ["983302"]},
+            {"libelle": "plaque de fixation RC", "references": ["987081"]},
+            {"libelle": "béquilles", "references": ["907350"]},
+            {"libelle": "tube acier RR**/20/2 (fourni par le métallier)", "motifs": [MOTIF_TUBE_RR]},
+        ]},
+        "seuil": None, "source": SOURCE_2,
+    },
+    {
+        "code": "RENFORT_FB",
+        "description": "Renfort 983302 = somme des besoins des profilés UNICO × 2 en FB6 (renforts doublés), × 1 en FB4.",
+        "type": "etude", "famille": "profile", "gravite": "erreur",
+        "condition": {"controle": "renfort_fb", "renfort": ["983302"], "mot_profile": "UNICO",
+                      "facteurs": {"FB6": 2}, "facteur_defaut": 1},
+        "seuil": 10, "source": SOURCE_2,  # tolérance en % (chutes)
+    },
+    {
+        "code": "ARTICLE_A_REMPLACER",
+        "description": "Articles à ne plus chiffrer, avec leur remplaçant.",
+        "type": "etude", "famille": "global", "gravite": "erreur",
+        "condition": {"controle": "article_a_remplacer", "remplacements": [
+            {"reference": "975301", "remplacant": "985301", "motif": "joint de butée de porte"},
+        ]},
+        "seuil": None, "source": SOURCE_2,
+    },
+    {
+        "code": "DISPONIBILITE",
+        "description": "Signaler les articles non tenus en stock ou sur demande (délai), sauf articles hors lot.",
+        "type": "etude", "famille": "global", "gravite": "info",
+        "condition": {"controle": "disponibilite", "motifs_hors_lot": [MOTIF_TUBE_RR]},
+        "seuil": None, "source": SOURCE_2,
+    },
+    {
+        "code": "BARRES_PROFILES",
+        "description": "Profilés vendus par barres de 6 m dont 5,90 m utilisables : nombre de barres suffisant pour le besoin.",
+        "type": "etude", "famille": "profile", "gravite": "erreur",
+        "condition": {"controle": "barres_profiles"},
+        "seuil": 5.9, "source": SOURCE_2,
+    },
+    {
+        "code": "CONSIGNE_VITRAGE_CR4_38",
+        "description": "Le rapport d'essai CR4/FB6 autorise un vitrage de 38 mm, même si le texte mentionne un panneau de 57 mm.",
+        "type": "etude", "famille": "vitrage", "gravite": "info",
+        "condition": {
+            "controle": "consigne_ia", "sens": "ignorer",
+            "texte": ("Porte CR4/FB6 : un vitrage de 38 mm est autorisé par le rapport d'essai même si le texte "
+                      "indique « panneau épaisseur 57 mm » : ne pas signaler cet écart."),
+        },
+        "seuil": None, "source": SOURCE_2,
     },
     # --- Règles proposées puis rejetées (historique) ----------------------------
     {

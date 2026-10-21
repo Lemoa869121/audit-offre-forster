@@ -50,6 +50,7 @@ class ErreurExtraction(Exception):
 CHAMPS_NUMERIQUES = {
     "valeur", "quantite", "largeur_mm", "hauteur_mm", "prix_unitaire", "total",
     "quantite_commandee", "besoin", "surface_m2", "perimetre_m", "somme_surface_m2", "somme_perimetre_m",
+    "nb_vantaux_bloc",
 }
 
 
@@ -87,6 +88,8 @@ TRACE = {
 VALEUR_TRACEE = _objet({"valeur": _nullable("number"), **TRACE})
 
 FAMILLES_MATIERE = ["profile", "ferrure", "accessoire", "joint"]
+SENS = ["interieur", "exterieur", ""]
+DIN = ["G", "D", ""]
 
 SCHEMA_EXTRACTION = _objet({
     "document": _objet({
@@ -115,6 +118,17 @@ SCHEMA_EXTRACTION = _objet({
             "materiau_parclose_configuration": _nullable("string"),
             "a_bloc_descriptif": {"type": "boolean"},
             "elements_hors_gamme": {"type": "array", "items": {"type": "string"}},
+            "classements": {"type": "array", "items": {"type": "string"}},
+            "rapport_essai": {"type": "string"},
+            "nb_vantaux_bloc": _nullable("number"),
+            "sens_ouverture": {"type": "string", "enum": SENS},
+            "sens_ouverture_bloc": {"type": "string", "enum": SENS},
+            "din": {"type": "string", "enum": DIN},
+            "ferrures_listees": {"type": "array", "items": {"type": "string"}},
+            "hors_lot": {"type": "array", "items": _objet({
+                "texte": {"type": "string"},
+                "reference_facturee": {"type": "string"},
+            })},
             **TRACE,
         })},
         "total_ht": VALEUR_TRACEE,
@@ -133,6 +147,10 @@ SCHEMA_EXTRACTION = _objet({
             "prix_unitaire": _nullable("number"),
             "unite_prix": {"type": "string", "enum": ["m", "pce", "autre"]},
             "total": _nullable("number"),
+            "din": {"type": "string", "enum": DIN},
+            "non_tenu_stock": {"type": "boolean"},
+            "sur_demande": {"type": "boolean"},
+            "hors_lot": {"type": "boolean"},
             **TRACE,
         })},
         "sous_totaux": {"type": "array", "items": _objet({
@@ -183,6 +201,8 @@ Règles d'extraction :
 déduite : remplis-la au mieux ET mets a_verifier = true.
 - texte_source : copie littérale courte (200 caractères max) de l'extrait du PDF d'où vient la donnée.
 - Nombres : écris-les avec un point décimal et sans espace ("1 384,73" -> "1384.73").
+- reference : la colonne "Numéro". Si elle est vide (ex. articles FFR en ferrure), prends la référence \
+écrite en début de description (ex. "FFR.297F.ND.A Serrure ISEO..." -> "FFR.297F.ND.A").
 - quantite_texte : la quantité telle qu'écrite (ex. "3 x 6 m (17,0)", "2 UV á 25 m (39,76)").
 - quantite_commandee : quantité totale commandée dans l'unité du prix : "3 x 6 m" -> 18 ; \
 "6 UV á 2 pce" -> 12 ; "2 UV á 25 m" -> 50 ; "4 pce" -> 4.
@@ -194,6 +214,21 @@ déduite : remplis-la au mieux ET mets a_verifier = true.
 - materiau_parclose_configuration : matériau après "Parclose :" dans le bloc Configurations, sinon null.
 - materiau (analyse matière) : matériau indiqué dans la description de l'article, sinon null.
 - Si une section est absente du document, renvoie des listes vides et des chaînes vides.
+
+Portes de sécurité et bloc descriptif (texte en couleur sous la description) :
+- classements : classements cités pour la position (ex. "FB6 selon rapport d'essai..." et "CR4 ..." -> ["FB6", "CR4"]).
+- rapport_essai : numéro(s) du rapport d'essai cité(s), sinon "".
+- nb_vantaux_bloc : nombre de vantaux écrit dans le bloc descriptif (ex. "Porte 1 vantail" -> "1"), sinon "".
+- sens_ouverture : sens chiffré dans la description de la porte ("ouvrants vers EXT" -> "exterieur").
+- sens_ouverture_bloc : sens écrit dans le bloc descriptif ("Ouverture intérieure" -> "interieur"), sinon "".
+- din : sens DIN de la porte ("DIN G" -> "G", "DIN D" -> "D"), sinon "".
+- ferrures_listees : lignes de la rubrique "Ferrures de fenêtre" de la position, telles qu'écrites.
+- hors_lot : chaque élément de la liste "Fourniture hors lot" (texte tel qu'écrit) ; reference_facturee = la référence de l'analyse matière qui correspond à cet élément (ex. "Adhésif TESA ACX+" -> la bande TESA ; "plat acier 35x5" -> "FL 35X5"), sinon "".
+Analyse matière :
+- din : "D" ou "G" si la désignation précise un sens (ex. "DIN D", "Droite", "porte droite"), sinon "".
+- non_tenu_stock : true si la désignation contient "Non tenu stock".
+- sur_demande : true si la désignation contient "sur demande".
+- hors_lot : true si l'article correspond à un élément de "Fourniture hors lot" (fourni par le métallier). Les tubes acier "RR<profondeur>/20/2" (ex. RR15/20/2) sont toujours fournis par le métallier.
 
 observations : liste uniquement les incohérences ou oublis techniques ou de prix significatifs que tu remarques \
 en lisant (ex. information contradictoire entre deux pages, mention manquante). Pas de remarques générales, \
