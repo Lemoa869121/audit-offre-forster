@@ -94,7 +94,9 @@ def lire_fichier_prix(dossier: Path, nom: str) -> tuple[list[dict], str]:
         else:
             prix = contenu.get("articles", []) + [dict(p, type_prix="net") for p in contenu.get("prix_nets_observes", [])]
             sources.append(fichier.name)
-    nets = dossier / "prix_nets_observes.json"
+    # nom attendu, ou variante avec espaces/majuscule (ex. « Prix nets observes.json »)
+    nets = next((f for f in (dossier / "prix_nets_observes.json", dossier / "Prix nets observes.json") if f.exists()),
+                dossier / "prix_nets_observes.json")
     if nets.exists():
         deja = {p["reference_produit"] for p in prix if p.get("type_prix") == "net"}
         prix += [dict(p, type_prix="net") for p in json.loads(nets.read_text(encoding="utf-8"))

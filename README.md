@@ -121,7 +121,7 @@ Deux fichiers dans `data/` :
 - `Tarif FFR 062026.json` (nom réglable par `FICHIER_PRIX` dans `.env`) : le tarif public FFR
   (3 691 articles, dont 91 « sur demande »). L'export brut de l'Excel est accepté tel quel et converti
   au chargement ; un fichier déjà converti par `import_tarif` fonctionne aussi ;
-- `prix_nets_observes.json` (facultatif, hors git) : les prix nets relevés dans les devis validés.
+- `prix_nets_observes.json` (ou « Prix nets observes.json ») : les prix nets relevés dans les devis validés.
 
 Contrôles de prix actuels :
 - `PRIX_NUL` : prix manquant ou à zéro. 0 € accepté pour un article hors lot ; article hors tarif à 0 € non
@@ -162,8 +162,10 @@ par utilisateur ou par équipe.
 
 ## Données sensibles
 
-- `.env` (clé API), la base SQLite, les PDF (hors fixtures fictives) et `data/prix_nets_observes.json` sont exclus de git.
-- Le tarif `data/Tarif FFR 062026.json` est versionné dans le repo (choix du propriétaire) : garder le repo **privé**.
+- `.env` (clé API), la base SQLite et les PDF (hors fixtures fictives) sont exclus de git. **Le fichier `.env` se crée
+  uniquement sur votre PC** (copie de `.env.example`) : ne jamais le créer ni le modifier sur le site GitHub.
+- Le tarif `data/Tarif FFR 062026.json` et `data/prix_nets_observes.json` sont versionnés dans le repo (choix du
+  propriétaire) : garder le repo **privé**.
 - Les logs ne contiennent que des métadonnées (nom du fichier, pages, tokens, coût), jamais le contenu des PDF.
 - Le schéma de la base a changé depuis les premières versions : si vous aviez déjà une base `audit_offres.db`,
   supprimez-la puis relancez `python -m app.db.seed`.
