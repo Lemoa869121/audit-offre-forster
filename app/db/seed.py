@@ -2,9 +2,11 @@
 Initialisation de la base avec les règles et prix validés.
 Usage : python -m app.db.seed
 
-Prix : fichier data/<FICHIER_PRIX>.json (réel, hors git, défaut "Tarif FFR 062026"),
-sinon data/tarif.exemple.json (prix fictifs). Format :
-    {"nom": "...", "articles": [...prix tarif...], "prix_nets_observes": [...prix nets...]}
+Prix : fichier data/<FICHIER_PRIX>.json (défaut "Tarif FFR 062026"), sinon data/tarif.exemple.json.
+Deux formats acceptés (voir app/services/import_tarif.lire_fichier_prix) :
+- export brut de l'Excel (liste de lignes "Article" / "Desigfnation" / "Tarif 2026"), converti à la volée ;
+- fichier converti {"nom", "articles", "prix_nets_observes"}.
+Prix nets observés supplémentaires : data/prix_nets_observes.json (facultatif, hors git).
 
 Idempotent :
 - règle déjà présente (même code) -> inchangée ;
@@ -12,7 +14,6 @@ Idempotent :
 - prix déjà présent avec un montant différent (nouveau tarif) -> l'ancien est ARCHIVÉ,
   le nouveau ajouté (historique conservé, jamais d'écrasement).
 """
-import json
 import os
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from sqlalchemy import select
 
 from app.db.database import SessionLocal, init_db
 from app.models import Famille, Gravite, PriceReference, Rule, Statut, TypeRegle
+from app.services.import_tarif import lire_fichier_prix
 from app.services.regles_initiales import REGLES_INITIALES, SOURCE
 
 DOSSIER_DATA = Path(__file__).resolve().parents[2] / "data"
@@ -63,12 +65,7 @@ def charger_regles(db) -> dict:
 
 
 def _lire_fichier_prix() -> tuple[list[dict], str]:
-    fichier = DOSSIER_DATA / f"{FICHIER_PRIX}.json"
-    if not fichier.exists():
-        fichier = DOSSIER_DATA / "tarif.exemple.json"
-    contenu = json.loads(fichier.read_text(encoding="utf-8"))
-    prix = contenu.get("articles", []) + [dict(p, type_prix="net") for p in contenu.get("prix_nets_observes", [])]
-    return prix, fichier.name
+    return lire_fichier_prix(DOSSIER_DATA, FICHIER_PRIX)
 
 
 def charger_prix(db) -> dict:

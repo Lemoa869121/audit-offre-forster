@@ -75,6 +75,34 @@ def convertir(lignes: list[dict], nom: str) -> tuple[list[dict], dict]:
     return list(articles.values()), stats
 
 
+def lire_fichier_prix(dossier: Path, nom: str) -> tuple[list[dict], str]:
+    """
+    Lit les prix à charger en base. Renvoie (prix, description de la source).
+    - data/<nom>.json : export brut (liste de lignes Excel, converti ici) ou fichier converti
+      {"nom", "articles", "prix_nets_observes"} ; à défaut data/tarif.exemple.json ; à défaut rien.
+    - data/prix_nets_observes.json (facultatif) : prix nets relevés dans les devis validés, ajoutés.
+    """
+    fichier = dossier / f"{nom}.json"
+    if not fichier.exists():
+        fichier = dossier / "tarif.exemple.json"
+    prix, sources = [], []
+    if fichier.exists():
+        contenu = json.loads(fichier.read_text(encoding="utf-8"))
+        if isinstance(contenu, list):  # export brut de l'Excel
+            prix, _ = convertir(contenu, nom)
+            sources.append(f"{fichier.name} (export brut converti)")
+        else:
+            prix = contenu.get("articles", []) + [dict(p, type_prix="net") for p in contenu.get("prix_nets_observes", [])]
+            sources.append(fichier.name)
+    nets = dossier / "prix_nets_observes.json"
+    if nets.exists():
+        deja = {p["reference_produit"] for p in prix if p.get("type_prix") == "net"}
+        prix += [dict(p, type_prix="net") for p in json.loads(nets.read_text(encoding="utf-8"))
+                 if p["reference_produit"] not in deja]
+        sources.append(nets.name)
+    return prix, " + ".join(sources) or "aucun fichier de prix"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("export", type=Path, help="Export JSON du tarif")

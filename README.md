@@ -29,9 +29,11 @@ pytest                             # tests du moteur de comparaison
 
 ## Prix de référence : tarif FFR + prix nets observés
 
-Le fichier `data/Tarif FFR 062026.json` (nom réglable par `FICHIER_PRIX` dans `.env`) contient :
-- `articles` : le tarif public FFR (3 691 articles, dont 91 « sur demande ») ;
-- `prix_nets_observes` : les prix nets relevés dans les devis validés.
+Deux fichiers dans `data/` :
+- `Tarif FFR 062026.json` (nom réglable par `FICHIER_PRIX` dans `.env`) : le tarif public FFR
+  (3 691 articles, dont 91 « sur demande »). L'export brut de l'Excel est accepté tel quel et converti
+  au chargement ; un fichier déjà converti par `import_tarif` fonctionne aussi ;
+- `prix_nets_observes.json` (facultatif, hors git) : les prix nets relevés dans les devis validés.
 
 Contrôles de prix actuels :
 - `PRIX_NUL` (erreur) : chaque article et chaque position doit avoir un prix, ni manquant ni à zéro ;
@@ -55,8 +57,8 @@ python -m app.db.seed   # les prix modifiés archivent l'ancienne version
 
 ## Données sensibles
 
-- `.env` (clé API), la base SQLite, les PDF et les fichiers de prix réels `data/*.json` sont exclus de git.
-- Sans fichier de prix réel, l'initialisation charge `data/tarif.exemple.json` (prix fictifs).
+- `.env` (clé API), la base SQLite, les PDF et `data/prix_nets_observes.json` sont exclus de git.
+- Le tarif `data/Tarif FFR 062026.json` est versionné dans le repo (choix du propriétaire) : garder le repo **privé**.
 - Le schéma de la base a changé (tarif) : si vous aviez déjà lancé `python -m app.db.seed`, supprimez
   `audit_offres.db` puis relancez-le.
 - Les logs ne contiennent que des métadonnées (nom du fichier, pages, tokens, coût), jamais le contenu des PDF.

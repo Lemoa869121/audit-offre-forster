@@ -440,3 +440,23 @@ def test_c6_hauteur_max_pv():
     assert _cr4("HAUTEUR_MAX_PV", d) == []  # 2300 <= 3240
     d["offre"]["positions"][0]["hauteur_mm"] = 3300
     assert _cr4("HAUTEUR_MAX_PV", d)[0].valeur_attendue == 3240
+
+
+# --- Lecture du fichier de prix (export brut ou converti) -------------------------------
+
+def test_lecture_export_brut_et_prix_nets(tmp_path):
+    from app.services.import_tarif import lire_fichier_prix
+    (tmp_path / "Tarif test.json").write_text(json.dumps([
+        {"Article": "531.731F.51.A", "Desigfnation": "531.731 x1.50 ZM unico 6000", "Tarif 2026": "47,90 €"},
+    ]), encoding="utf-8")
+    (tmp_path / "prix_nets_observes.json").write_text(json.dumps([
+        {"reference_produit": "531.731 ZM", "famille": "profile", "prix_reference": 31.14, "unite": "m"},
+    ]), encoding="utf-8")
+    prix, source = lire_fichier_prix(tmp_path, "Tarif test")
+    assert [(p["type_prix"], p["prix_reference"]) for p in prix] == [("tarif", 47.90), ("net", 31.14)]
+    assert "export brut" in source
+
+
+def test_lecture_sans_fichier(tmp_path):
+    from app.services.import_tarif import lire_fichier_prix
+    assert lire_fichier_prix(tmp_path, "absent") == ([], "aucun fichier de prix")
