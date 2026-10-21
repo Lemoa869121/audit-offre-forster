@@ -184,7 +184,8 @@ def lignes_correspondantes(donnees: dict, condition: dict) -> list[dict]:
 # --- Classements (CR4, FB6...) et articles hors lot -----------------------------------
 
 def classements(position: dict) -> set[str]:
-    return {c.upper().replace(" ", "") for c in position.get("classements") or []}
+    """Classements normalisés : 'RC4' et 'CR4' désignent la même classe anti-effraction -> 'CR4'."""
+    return {re.sub(r"^RC(\d)$", r"CR\1", c.upper().replace(" ", "")) for c in position.get("classements") or []}
 
 
 def est_classee(position: dict, voulus: list[str] | None) -> bool:
@@ -289,6 +290,8 @@ def ctrl_prix_nul(donnees: dict, regle: dict, ctx: Contexte) -> list[AnomalieDet
         probleme = _probleme_prix(ligne)
         if probleme == "prix à zéro" and est_hors_lot(ligne, donnees, motifs_hors_lot):
             continue  # article hors lot (fourni par le métallier) : prix à zéro normal
+        if probleme == "prix à zéro":
+            probleme += " et article absent de la liste « Fourniture hors lot »"
         if probleme:
             anomalies.append(_anomalie(
                 regle, f"Article {ligne.get('reference')} ({ligne.get('designation')}) : {probleme}.",

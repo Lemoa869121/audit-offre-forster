@@ -297,7 +297,8 @@ def _cr4(code, donnees=None, prix=PRIX):
 
 def test_cr4_prix_zero_accepte_si_hors_lot():
     # FL 35X5 (cité hors lot) et RR15/20/2 (motif tube RR) acceptés ; Z-999 à 0 € non hors lot -> erreur
-    assert [a.reference_produit for a in _cr4("PRIX_NUL")] == ["Z-999"]
+    a = _cr4("PRIX_NUL")
+    assert [x.reference_produit for x in a] == ["Z-999"] and "hors lot" in a[0].message
 
 
 def test_cr4_4_paumelles_par_vantail():
@@ -379,3 +380,9 @@ def test_barres_profiles_5_90_utiles():
 
 def test_chute_ignore_les_profiles():
     assert all(a.famille != "profile" for a in _cr4("CHUTE_CONDITIONNEMENT"))
+
+
+def test_rc4_equivaut_a_cr4():
+    donnees = copy.deepcopy(FIXTURE_CR4)
+    donnees["offre"]["positions"][0]["classements"] = ["FB6", "RC4"]
+    assert len(_cr4("KIT_CR4", donnees)) == 2  # kit CR4 appliqué
