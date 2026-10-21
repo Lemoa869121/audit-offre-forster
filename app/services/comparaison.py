@@ -901,7 +901,10 @@ def comparer(
             logger.warning("Règle %s : contrôle '%s' inconnu, ignorée.", regle.get("code"), nom)
             continue
         try:
-            anomalies.extend(controle(donnees, regle, ctx))
+            # Exceptions ajoutées après un rejet (faux positif) : articles que la règle ne doit plus signaler
+            exceptions = {code_base(r) for r in (regle.get("condition") or {}).get("exceptions_references", [])}
+            anomalies.extend(a for a in controle(donnees, regle, ctx)
+                             if not (a.reference_produit and code_base(a.reference_produit) in exceptions))
         except Exception:  # une règle défaillante ne doit pas bloquer les autres
             logger.exception("Erreur dans le contrôle de la règle %s", regle.get("code"))
 

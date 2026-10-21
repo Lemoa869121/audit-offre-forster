@@ -26,6 +26,7 @@ from app.services.regles_initiales import REGLES_INITIALES, SOURCE
 
 DOSSIER_DATA = Path(__file__).resolve().parents[2] / "data"
 FICHIER_PRIX = os.getenv("FICHIER_PRIX", "Tarif FFR 062026")
+PREFIXE_INIT = "[init]"
 
 
 def _famille(valeur: str) -> Famille:
@@ -38,18 +39,19 @@ def charger_regles(db) -> dict:
     Règle présente et identique -> inchangée.
     Règle présente mais modifiée dans regles_initiales.py -> version courante archivée,
     nouvelle version créée avec son motif (jamais d'écrasement).
-    Une règle désactivée manuellement en base n'est pas réactivée.
+    Les versions écrites ici ont un motif préfixé "[init]". Si la version courante vient de l'application
+    (exception, nouveau seuil, désactivation...), elle n'est PAS remplacée : la décision de l'utilisateur prime,
+    et la règle est listée dans "ignorees" pour arbitrage.
     """
-    stats = {"ajoutees": 0, "nouvelles_versions": 0}
+    stats = {"ajoutees": 0, "nouvelles_versions": 0, "ignorees": []}
     for r in REGLES_INITIALES:
-        versions = db.scalars(select(Rule).where(Rule.code == r["code"]).order_by(Rule.version.desc())).all()
-        courante = versions[0] if versions else None
+        courante = db.scalars(select(Rule).where(Rule.code == r["code"]).order_by(Rule.version.desc())).first()
         if courante and (courante.description, courante.condition, courante.seuil) == (r["description"], r["condition"], r["seuil"]):
             continue
-        statut = Statut(r.get("statut", "actif"))
+        if courante and not (courante.motif_changement or "").startswith(PREFIXE_INIT):
+            stats["ignorees"].append(r["code"])  # modifiée dans l'application : on ne touche pas
+            continue
         if courante:
-            if courante.statut == Statut.archive and statut == Statut.actif and not courante.motif_changement:
-                continue  # désactivée à la main : on respecte ce choix
             courante.statut = Statut.archive
             stats["nouvelles_versions"] += 1
         else:
@@ -57,9 +59,9 @@ def charger_regles(db) -> dict:
         db.add(Rule(
             code=r["code"], version=(courante.version + 1) if courante else 1, description=r["description"],
             type=TypeRegle(r["type"]), famille=_famille(r["famille"]), gravite=Gravite(r["gravite"]),
-            condition=r["condition"], seuil=r["seuil"], statut=statut,
-            motif_changement=r.get("motif_changement"), source_pdf=r.get("source", SOURCE),
-            remplace_id=courante.id if courante else None,
+            condition=r["condition"], seuil=r["seuil"], statut=Statut(r.get("statut", "actif")),
+            motif_changement=f"{PREFIXE_INIT} {r.get('motif_changement') or 'règle initiale'}",
+            source_pdf=r.get("source", SOURCE), remplace_id=courante.id if courante else None,
         ))
     return stats
 
@@ -81,6 +83,9 @@ def charger_prix(db) -> dict:
         if actuel and actuel.prix_reference == p["prix_reference"]:
             stats["inchanges"] += 1
             continue
+        if actuel and type_prix == "net" and actuel.source != p.get("source"):
+            stats["inchanges"] += 1  # prix net corrigé dans l'application : la décision de l'utilisateur prime
+            continue
         if actuel:  # nouveau montant : on archive l'ancien
             actuel.statut = Statut.archive
             stats["mis_a_jour"] += 1
@@ -101,6 +106,8 @@ if __name__ == "__main__":
         r = charger_regles(db)
         s = charger_prix(db)
         db.commit()
+    if r["ignorees"]:
+        print(f"Règles modifiées dans l'application, non remplacées par le code : {', '.join(r['ignorees'])}")
     print(f"Règles : {r['ajoutees']} ajoutée(s), {r['nouvelles_versions']} nouvelle(s) version(s). "
           f"Prix depuis {s['source']} : {s['ajoutes']} ajouté(s), "
           f"{s['mis_a_jour']} mis à jour (ancien archivé), {s['inchanges']} inchangé(s).")

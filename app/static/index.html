@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit offres</title>
+<style>
+  :root {
+    --fond: #f6f5f2; --carte: #ffffff; --texte: #1d1f22; --doux: #5f646b; --ligne: #e2e0da;
+    --accent: #1f5f8b; --accent-texte: #ffffff;
+    --erreur: #b42318; --erreur-fond: #fdecea; --alerte: #a15c00; --alerte-fond: #fff4e0;
+    --info: #3d5a73; --info-fond: #e9f0f6; --ok: #2f7a3e; --ok-fond: #e7f4ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fond: #17191c; --carte: #202328; --texte: #e8e6e1; --doux: #a3a7ad; --ligne: #33373d;
+      --accent: #6aa8d6; --accent-texte: #0f1215;
+      --erreur: #ff8a7a; --erreur-fond: #3a1f1c; --alerte: #f0b35a; --alerte-fond: #3a2c16;
+      --info: #9cc0dd; --info-fond: #1e2b36; --ok: #7fcf8e; --ok-fond: #1c3222;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 24px; padding: 16px 24px; border-bottom: 1px solid var(--ligne); background: var(--carte); }
+  header h1 { font-size: 18px; margin: 0; }
+  header .stats { color: var(--doux); font-size: 13px; }
+  nav { display: flex; gap: 4px; padding: 0 24px; background: var(--carte); border-bottom: 1px solid var(--ligne); overflow-x: auto; }
+  nav button { border: 0; background: none; padding: 12px 14px; font: inherit; color: var(--doux); cursor: pointer; border-bottom: 2px solid transparent; }
+  nav button.actif { color: var(--texte); border-bottom-color: var(--accent); font-weight: 600; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  section { display: none; } section.actif { display: block; }
+  .carte { background: var(--carte); border: 1px solid var(--ligne); border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
+  h2 { font-size: 17px; margin: 0 0 12px; } h3 { font-size: 15px; margin: 0 0 8px; }
+  label { display: block; font-size: 13px; color: var(--doux); margin: 10px 0 4px; }
+  input, textarea, select { font: inherit; color: var(--texte); background: var(--fond); border: 1px solid var(--ligne); border-radius: 6px; padding: 7px 9px; width: 100%; }
+  input[type=checkbox] { width: auto; flex: none; margin: 0; accent-color: var(--accent); }
+  label.case { display: inline-flex; align-items: center; gap: 6px; margin: 4px 14px 4px 0; color: var(--texte); font-size: 14px; }
+  textarea { min-height: 90px; font-family: ui-monospace, monospace; font-size: 13px; }
+  .ligne { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ligne > input, .ligne > select { width: auto; flex: 1 1 160px; }
+  button.b { font: inherit; border: 1px solid var(--ligne); background: var(--carte); color: var(--texte); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.b:hover { border-color: var(--accent); }
+  button.principal { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
+  button.valider { border-color: var(--ok); color: var(--ok); } button.rejeter { border-color: var(--erreur); color: var(--erreur); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .doux { color: var(--doux); font-size: 13px; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; }
+  .g-erreur { background: var(--erreur-fond); color: var(--erreur); } .g-alerte { background: var(--alerte-fond); color: var(--alerte); }
+  .g-info { background: var(--info-fond); color: var(--info); } .s-valide { background: var(--ok-fond); color: var(--ok); }
+  .s-rejete { background: var(--erreur-fond); color: var(--erreur); } .s-corrige { background: var(--alerte-fond); color: var(--alerte); }
+  .s-en_attente { background: var(--fond); color: var(--doux); border: 1px solid var(--ligne); }
+  .anomalie { border-left: 4px solid var(--ligne); } .anomalie.erreur { border-left-color: var(--erreur); }
+  .anomalie.alerte { border-left-color: var(--alerte); } .anomalie.info { border-left-color: var(--info); }
+  .anomalie.traitee { opacity: .72; }
+  .message { margin: 6px 0; }
+  details { margin-top: 6px; } summary { cursor: pointer; color: var(--doux); font-size: 13px; }
+  pre { white-space: pre-wrap; word-break: break-word; background: var(--fond); padding: 8px; border-radius: 6px; font-size: 12.5px; margin: 6px 0 0; }
+  .retour { margin-top: 10px; padding: 10px 12px; border-radius: 6px; background: var(--fond); font-size: 14px; }
+  .conflit { background: var(--alerte-fond); color: var(--texte); border: 1px solid var(--alerte); }
+  .bandeau { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; }
+  .bandeau.attention { background: var(--alerte-fond); border: 1px solid var(--alerte); }
+  .bandeau.erreur { background: var(--erreur-fond); border: 1px solid var(--erreur); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--ligne); vertical-align: top; }
+  th { color: var(--doux); font-weight: 600; font-size: 13px; }
+  tr.cliquable { cursor: pointer; } tr.cliquable:hover td { background: var(--fond); }
+  .tableau { overflow-x: auto; }
+  .chiffres { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 8px; }
+  .chiffres div { font-size: 13px; color: var(--doux); } .chiffres b { color: var(--texte); font-size: 15px; }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Audit des offres</h1>
+  <span class="stats" id="stats">…</span>
+</header>
+<nav>
+  <button data-onglet="analyser" class="actif">Analyser</button>
+  <button data-onglet="historique">Historique</button>
+  <button data-onglet="resultat" id="onglet-resultat" hidden>Résultat</button>
+  <button data-onglet="regles">Règles</button>
+  <button data-onglet="prix">Prix</button>
+</nav>
+<main>
+
+<section id="analyser" class="actif">
+  <div class="carte">
+    <h2>Analyser une offre PDF</h2>
+    <form id="form-pdf">
+      <label for="fichier">Fichier PDF</label>
+      <input type="file" id="fichier" accept="application/pdf" required>
+      <label for="familles">Ne contrôler que certaines familles (facultatif)</label>
+      <div id="familles">
+        <label class="case"><input type="checkbox" value="profile"> Profilés</label>
+        <label class="case"><input type="checkbox" value="ferrure"> Ferrures</label>
+        <label class="case"><input type="checkbox" value="accessoire"> Accessoires</label>
+        <label class="case"><input type="checkbox" value="joint"> Joints</label>
+      </div>
+      <label class="case" style="margin-top:12px"><input type="checkbox" id="forcer"> Réanalyser si ce PDF a déjà été analysé (nouvel appel API)</label>
+      <p class="ligne" style="margin-top:14px"><button class="b principal" type="submit" id="bouton-pdf">Analyser</button>
+        <span class="doux" id="etat-pdf"></span></p>
+    </form>
+  </div>
+  <div class="carte">
+    <h2>Tester sans appel API</h2>
+    <p class="doux">Envoyez un JSON au format de l'extraction (ex. <code>tests/fixtures/extraction_cr4_fictive.json</code>) : le pipeline
+      comparaison → anomalies → décisions fonctionne sans coût.</p>
+    <form id="form-json">
+      <input type="file" id="fichier-json" accept="application/json" required>
+      <p class="ligne" style="margin-top:12px"><button class="b" type="submit">Analyser le JSON</button>
+        <span class="doux" id="etat-json"></span></p>
+    </form>
+  </div>
+</section>
+
+<section id="historique">
+  <div class="carte"><h2>Analyses</h2><div class="tableau" id="liste-analyses"></div></div>
+</section>
+
+<section id="resultat"><div id="detail"></div></section>
+
+<section id="regles">
+  <div class="carte">
+    <div class="ligne" style="justify-content:space-between"><h2 style="margin:0">Règles</h2>
+      <select id="filtre-regles" style="width:auto"><option value="actif">Actives</option><option value="archive">Archivées</option><option value="tous">Toutes les versions</option></select></div>
+    <div class="tableau" id="liste-regles" style="margin-top:10px"></div>
+  </div>
+  <div class="carte">
+    <details><summary>Créer une règle à la main</summary>
+      <form id="form-regle">
+        <div class="ligne"><input id="r-code" placeholder="CODE_REGLE" required><select id="r-type"><option value="etude">Étude</option><option value="prix">Prix</option></select>
+          <select id="r-gravite"><option value="erreur">Erreur</option><option value="alerte">Alerte</option><option value="info">Info</option></select>
+          <select id="r-famille"><option value="global">Global</option><option value="offre">Offre</option><option value="profile">Profilés</option><option value="ferrure">Ferrures</option><option value="accessoire">Accessoires</option><option value="joint">Joints</option><option value="vitrage">Vitrage</option></select>
+          <input id="r-seuil" type="number" step="any" placeholder="Seuil (facultatif)"></div>
+        <label for="r-description">Description</label><input id="r-description" required>
+        <label for="r-condition">Condition (JSON) — ex. consigne pour Claude ou contrôle existant</label>
+        <textarea id="r-condition">{"controle": "consigne_ia", "sens": "signaler", "texte": ""}</textarea>
+        <p><button class="b principal" type="submit">Créer</button> <span class="doux" id="etat-regle"></span></p>
+      </form>
+    </details>
+  </div>
+</section>
+
+<section id="prix">
+  <div class="carte">
+    <h2>Prix de référence</h2>
+    <div class="ligne"><input id="recherche-prix" placeholder="Référence ou désignation (ex. 907662, paumelle)">
+      <select id="type-prix" style="width:auto"><option value="tous">Net et tarif</option><option value="net">Prix nets</option><option value="tarif">Tarif</option></select>
+      <button class="b" id="bouton-prix">Chercher</button></div>
+    <div class="tableau" id="liste-prix" style="margin-top:10px"></div>
+  </div>
+  <div class="carte">
+    <details><summary>Ajouter ou remplacer un prix net</summary>
+      <form id="form-prix" class="ligne" style="margin-top:10px">
+        <input id="p-ref" placeholder="Référence (ex. 531.731 ZM)" required>
+        <input id="p-prix" type="number" step="any" placeholder="Prix net HT" required>
+        <select id="p-famille"><option value="profile">Profilé</option><option value="ferrure">Ferrure</option><option value="accessoire">Accessoire</option><option value="joint">Joint</option></select>
+        <input id="p-unite" placeholder="Unité (m, pce)" value="pce">
+        <button class="b principal" type="submit">Enregistrer</button> <span class="doux" id="etat-prix"></span>
+      </form>
+    </details>
+  </div>
+</section>
+</main>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const nombre = (v, d = 2) => v == null ? "—" : Number(v).toLocaleString("fr-FR", {maximumFractionDigits: d});
+const date = (iso) => iso ? new Date(iso).toLocaleString("fr-FR", {dateStyle: "short", timeStyle: "short"}) : "";
+const GRAVITE = {erreur: "Erreur", alerte: "Alerte", info: "Info"};
+const STATUT = {en_attente: "À traiter", valide: "Validée", rejete: "Rejetée", corrige: "Corrigée"};
+const NATURE = {ecart: "", observation_ia: "remarque de Claude", proposition_prix: "nouveau prix"};
+
+async function api(url, options = {}) {
+  const reponse = await fetch(url, options);
+  const corps = await reponse.json().catch(() => ({}));
+  if (!reponse.ok) {
+    const detail = Array.isArray(corps.detail) ? corps.detail.map(d => d.msg).join(" ; ") : corps.detail;
+    throw new Error(detail || `Erreur ${reponse.status}`);
+  }
+  return corps;
+}
+const json = (corps) => ({method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corps)});
+
+function onglet(nom) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("actif", b.dataset.onglet === nom));
+  document.querySelectorAll("main section").forEach(s => s.classList.toggle("actif", s.id === nom));
+  if (nom === "historique") chargerHistorique();
+  if (nom === "regles") chargerRegles();
+}
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => onglet(b.dataset.onglet)));
+
+async function chargerStats() {
+  try {
+    const s = await api("/statistiques");
+    $("#stats").textContent = `${s.nb_analyses} analyse(s) · ${s.regles_actives} règles actives · ${s.prix_actifs} prix · ` +
+      `coût API total ${nombre(s.cout_total_usd, 3)} $` + (s.cout_moyen_par_pdf_usd ? ` (≈ ${nombre(s.cout_moyen_par_pdf_usd, 3)} $ / PDF)` : "");
+  } catch (e) { $("#stats").textContent = e.message; }
+}
+
+// --- Analyser ---------------------------------------------------------------------------
+$("#form-pdf").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const fichier = $("#fichier").files[0]; if (!fichier) return;
+  const donnees = new FormData();
+  donnees.append("fichier", fichier);
+  donnees.append("familles", [...document.querySelectorAll("#familles input:checked")].map(c => c.value).join(","));
+  donnees.append("forcer", $("#forcer").checked);
+  $("#bouton-pdf").disabled = true;
+  $("#etat-pdf").textContent = "Extraction par Claude en cours (30 s à 2 min selon le nombre de pages)…";
+  try { afficherAnalyse(await api("/analyses", {method: "POST", body: donnees})); $("#etat-pdf").textContent = ""; }
+  catch (e) { $("#etat-pdf").textContent = e.message; }
+  finally { $("#bouton-pdf").disabled = false; chargerStats(); }
+});
+
+$("#form-json").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const fichier = $("#fichier-json").files[0]; if (!fichier) return;
+  try {
+    const donnees = JSON.parse(await fichier.text());
+    afficherAnalyse(await api("/analyses/simulation", json({nom: fichier.name, donnees, forcer: true})));
+    $("#etat-json").textContent = "";
+  } catch (e) { $("#etat-json").textContent = e.message; }
+  chargerStats();
+});
+
+// --- Historique ---------------------------------------------------------------------------
+async function chargerHistorique() {
+  const liste = await api("/analyses");
+  $("#liste-analyses").innerHTML = liste.length ? `<table><tr><th>Date</th><th>Fichier</th><th>Affaire</th><th>Anomalies</th><th>À traiter</th><th>Coût</th></tr>` +
+    liste.map(a => `<tr class="cliquable" data-id="${a.id}"><td>${date(a.date_analyse)}</td><td>${esc(a.nom_pdf)}</td><td>${esc(a.reference_affaire)}</td>
+      <td class="num">${a.nb_anomalies} <span class="doux">(${a.nb_erreurs} erreur(s))</span></td><td class="num">${a.nb_en_attente}</td>
+      <td class="num">${a.cout_estime_usd ? nombre(a.cout_estime_usd, 3) + " $" : "—"}</td></tr>`).join("") + `</table>`
+    : `<p class="doux">Aucune analyse pour l'instant.</p>`;
+  document.querySelectorAll("#liste-analyses tr[data-id]").forEach(tr =>
+    tr.addEventListener("click", async () => afficherAnalyse(await api(`/analyses/${tr.dataset.id}`))));
+}
+
+// --- Résultat d'une analyse -------------------------------------------------------------------
+let analyseCourante = null;
+
+function afficherAnalyse(a) {
+  analyseCourante = a;
+  $("#onglet-resultat").hidden = false;
+  const ind = a.indicateurs || {};
+  const m2 = (ind.prix_m2_par_position || []).map(p => `${esc(p.numero)} ${esc(p.typologie)} : ${nombre(p.prix_m2, 0)} €/m²`).join(" · ");
+  $("#detail").innerHTML = `
+    ${a.pdf_scanne ? `<div class="bandeau attention"><b>PDF scanné</b> : extraction moins fiable, toutes les données sont marquées « à vérifier ».</div>` : ""}
+    <div class="carte">
+      <h2>${esc(a.reference_affaire || a.nom_pdf)}</h2>
+      <div class="doux">${esc(a.nom_pdf)} · ${date(a.date_analyse)} · ${esc(a.modele || "")}</div>
+      <div class="chiffres">
+        <div>Anomalies<br><b>${a.nb_anomalies}</b></div><div>Erreurs<br><b>${a.nb_erreurs}</b></div>
+        <div>À traiter<br><b id="nb-attente">${a.nb_en_attente}</b></div>
+        <div>Données à vérifier<br><b>${a.nb_donnees_a_verifier ?? 0}</b></div>
+        <div>Coût API<br><b>${a.cout_estime_usd ? nombre(a.cout_estime_usd, 3) + " $" : "—"}</b></div>
+        <div>Tokens<br><b>${nombre(a.tokens_entree, 0)} / ${nombre(a.tokens_sortie, 0)}</b></div>
+        ${ind.ratio_offre_sur_matiere ? `<div>Offre / matière<br><b>${nombre(ind.ratio_offre_sur_matiere, 3)}</b></div>` : ""}
+      </div>
+      ${m2 ? `<p class="doux" style="margin:10px 0 0">${m2}</p>` : ""}
+      <p class="ligne" style="margin:12px 0 0"><label class="case"><input type="checkbox" id="seulement-attente"> Seulement les anomalies à traiter</label>
+        <a class="doux" href="/analyses/${a.id}?avec_donnees=true" target="_blank" style="margin-left:auto">Données extraites (JSON)</a></p>
+    </div>
+    <div id="anomalies">${a.anomalies.length ? a.anomalies.map(carteAnomalie).join("") : `<div class="carte">Aucune anomalie détectée.</div>`}</div>`;
+  $("#seulement-attente").addEventListener("change", (e) =>
+    document.querySelectorAll(".anomalie.traitee").forEach(c => c.hidden = e.target.checked));
+  brancherAnomalies();
+  onglet("resultat");
+}
+
+function carteAnomalie(an) {
+  const valeurs = [an.valeur_trouvee != null && `trouvé ${nombre(an.valeur_trouvee)}`, an.valeur_attendue != null && `attendu ${nombre(an.valeur_attendue)}`,
+    an.ecart_pct != null && `écart ${nombre(an.ecart_pct, 1)} %`].filter(Boolean).join(" · ");
+  return `<div class="carte anomalie ${an.gravite} ${an.statut !== "en_attente" ? "traitee" : ""}" data-id="${an.id}">
+    <div class="ligne"><span class="badge g-${an.gravite}">${GRAVITE[an.gravite]}</span>
+      <b>${esc(an.code_regle || NATURE[an.nature] || "")}</b><span class="doux">${esc(an.famille)}</span>
+      <span class="badge s-${an.statut}" style="margin-left:auto">${STATUT[an.statut]}</span></div>
+    <p class="message">${esc(an.message)}</p>
+    ${valeurs ? `<div class="doux num">${valeurs}</div>` : ""}
+    ${an.texte_source ? `<details><summary>Extrait du PDF</summary><pre>${esc(an.texte_source)}</pre></details>` : ""}
+    <div class="ligne" style="margin-top:10px">
+      <input class="commentaire" placeholder="Commentaire (facultatif, conservé dans l'historique)" value="${esc(an.commentaire || "")}">
+      <input class="valeur" type="number" step="any" placeholder="Bonne valeur" style="flex:0 1 130px" value="${an.valeur_corrigee ?? ""}">
+      <button class="b valider" data-decision="valide">Valider</button>
+      <button class="b rejeter" data-decision="rejete">Rejeter</button>
+      <button class="b" data-decision="corrige">Corriger</button>
+    </div>
+    <div class="retours"></div>
+  </div>`;
+}
+
+function brancherAnomalies() {
+  document.querySelectorAll(".anomalie").forEach(carte => {
+    carte.querySelectorAll("button[data-decision]").forEach(bouton => bouton.addEventListener("click", async () => {
+      const decision = bouton.dataset.decision;
+      const valeur = carte.querySelector(".valeur").value;
+      const corps = {decision, commentaire: carte.querySelector(".commentaire").value || null,
+                     valeur_corrigee: valeur === "" ? null : Number(valeur)};
+      const retours = carte.querySelector(".retours");
+      try {
+        const r = await api(`/anomalies/${carte.dataset.id}/decision`, json(corps));
+        const badge = carte.querySelector(".badge[class*='s-']");
+        badge.className = `badge s-${r.anomalie.statut}`; badge.textContent = STATUT[r.anomalie.statut];
+        carte.classList.add("traitee");
+        $("#nb-attente").textContent = document.querySelectorAll(".anomalie:not(.traitee)").length;
+        retours.innerHTML = afficherRetour(r);
+        retours.querySelectorAll("button[data-proposition]").forEach(b => b.addEventListener("click", () =>
+          appliquerProposition(r.propositions[Number(b.dataset.proposition)], b)));
+      } catch (e) { retours.innerHTML = `<div class="retour conflit">${esc(e.message)}</div>`; }
+    }));
+  });
+}
+
+function afficherRetour(r) {
+  let html = r.applique.map(t => `<div class="retour">${esc(t)}</div>`).join("");
+  if (r.conflit) html += `<div class="retour conflit"><b>À trancher :</b> ${esc(r.conflit)}</div>`;
+  if (r.propositions.length) html += `<div class="retour"><div class="doux">Propositions (rien n'est modifié sans votre clic) :</div>` +
+    r.propositions.map((p, i) => `<div class="ligne" style="margin-top:6px">
+      ${p.donnees.a_saisir ? `<input class="saisie" type="number" step="any" placeholder="Nouveau ${esc(p.donnees.a_saisir)}" style="flex:0 1 150px">` : ""}
+      <button class="b" data-proposition="${i}">${esc(p.libelle)}</button></div>`).join("") + `</div>`;
+  if (!html) html = `<div class="retour">Décision enregistrée.</div>`;
+  return html;
+}
+
+async function appliquerProposition(p, bouton) {
+  const proposition = structuredClone(p);
+  if (p.donnees.a_saisir) {
+    const saisie = bouton.parentElement.querySelector(".saisie").value;
+    if (saisie === "") { bouton.insertAdjacentHTML("afterend", `<span class="doux"> indiquez la valeur</span>`); return; }
+    proposition.donnees.modifications[p.donnees.a_saisir] = Number(saisie);
+  }
+  bouton.disabled = true;
+  try { const r = await api("/anomalies/appliquer", json({proposition})); bouton.outerHTML = `<span>✓ ${esc(r.message)}</span>`; chargerStats(); }
+  catch (e) { bouton.disabled = false; bouton.insertAdjacentHTML("afterend", `<span class="doux"> ${esc(e.message)}</span>`); }
+}
+
+// --- Règles ---------------------------------------------------------------------------------
+$("#filtre-regles").addEventListener("change", chargerRegles);
+
+async function chargerRegles() {
+  const statut = $("#filtre-regles").value;
+  const regles = await api(`/regles?statut=${statut}`);
+  const decisions = (d) => d && Object.keys(d).length ? `<span class="doux num">✓${d.valide || 0} ✗${d.rejete || 0} ✎${d.corrige || 0}</span>` : "";
+  $("#liste-regles").innerHTML = `<table><tr><th>Règle</th><th>Description</th><th>Seuil</th><th>Décisions</th><th></th></tr>` +
+    regles.map(r => `<tr><td><b>${esc(r.code)}</b><br><span class="badge g-${r.gravite}">${GRAVITE[r.gravite]}</span> <span class="doux">v${r.version} · ${esc(r.famille)}</span></td>
+      <td>${esc(r.description)}${r.motif_changement ? `<div class="doux">${esc(r.motif_changement)}</div>` : ""}</td>
+      <td class="num">${r.seuil ?? "—"}</td><td>${decisions(r.decisions)}</td>
+      <td style="white-space:nowrap"><button class="b" data-historique="${esc(r.code)}">Historique</button>
+        ${r.statut === "actif" ? `<button class="b rejeter" data-desactiver="${esc(r.code)}">Désactiver</button>`
+          : statut === "archive" ? `<button class="b" data-reactiver="${esc(r.code)}">Réactiver</button>` : ""}</td></tr>
+      <tr hidden data-detail="${esc(r.code)}"><td colspan="5"></td></tr>`).join("") + `</table>`;
+  document.querySelectorAll("[data-historique]").forEach(b => b.addEventListener("click", async () => {
+    const ligne = document.querySelector(`tr[data-detail="${b.dataset.historique}"]`);
+    if (!ligne.hidden) { ligne.hidden = true; return; }
+    const h = await api(`/regles/${encodeURIComponent(b.dataset.historique)}`);
+    ligne.firstElementChild.innerHTML = h.versions.map(v => `<div class="doux">v${v.version} · ${v.statut} · ${date(v.date_creation)} · ${esc(v.source_pdf || "")}<br>
+      ${esc(v.motif_changement || "")}</div><pre>${esc(JSON.stringify({seuil: v.seuil, condition: v.condition}, null, 1))}</pre>`).join("");
+    ligne.hidden = false;
+  }));
+  const action = (attribut, chemin, question) => document.querySelectorAll(`[data-${attribut}]`).forEach(b => b.addEventListener("click", async () => {
+    const motif = prompt(question); if (!motif) return;
+    try { await api(`/regles/${encodeURIComponent(b.dataset[attribut])}/${chemin}`, json({motif})); chargerRegles(); chargerStats(); }
+    catch (e) { alert(e.message); }
+  }));
+  action("desactiver", "desactiver", "Pourquoi désactiver cette règle ? (conservé dans l'historique)");
+  action("reactiver", "reactiver", "Pourquoi réactiver cette règle ?");
+}
+
+$("#form-regle").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  try {
+    const corps = {code: $("#r-code").value, description: $("#r-description").value, type: $("#r-type").value,
+      gravite: $("#r-gravite").value, famille: $("#r-famille").value, condition: JSON.parse($("#r-condition").value),
+      seuil: $("#r-seuil").value === "" ? null : Number($("#r-seuil").value)};
+    const r = await api("/regles", json(corps));
+    $("#etat-regle").textContent = `Règle ${r.code} créée.`; chargerRegles(); chargerStats();
+  } catch (e) { $("#etat-regle").textContent = e instanceof SyntaxError ? "Condition : JSON invalide." : e.message; }
+});
+
+// --- Prix -------------------------------------------------------------------------------------
+async function chercherPrix() {
+  const liste = await api(`/prix?recherche=${encodeURIComponent($("#recherche-prix").value)}&type_prix=${$("#type-prix").value}`);
+  $("#liste-prix").innerHTML = liste.length ? `<table><tr><th>Type</th><th>Référence</th><th>Désignation</th><th>Prix</th><th>Unité</th><th>Source</th></tr>` +
+    liste.map(p => `<tr><td>${p.type_prix}</td><td><b>${esc(p.reference_produit)}</b></td><td>${esc(p.designation)}</td>
+      <td class="num">${p.prix_reference == null ? "sur demande" : nombre(p.prix_reference) + " €"}</td><td>${esc(p.unite)}</td><td class="doux">${esc(p.source)}</td></tr>`).join("") + `</table>`
+    : `<p class="doux">Aucun prix trouvé.</p>`;
+}
+$("#bouton-prix").addEventListener("click", chercherPrix);
+$("#recherche-prix").addEventListener("keydown", (e) => { if (e.key === "Enter") chercherPrix(); });
+
+$("#form-prix").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  try {
+    const p = await api("/prix", json({reference: $("#p-ref").value, prix: Number($("#p-prix").value), famille: $("#p-famille").value, unite: $("#p-unite").value}));
+    $("#etat-prix").textContent = `${p.reference_produit} = ${nombre(p.prix_reference)} € enregistré.`; chargerStats();
+  } catch (e) { $("#etat-prix").textContent = e.message; }
+});
+
+chargerStats();
+</script>
+</body>
+</html>
