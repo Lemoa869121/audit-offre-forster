@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import re
 import logging
 from dataclasses import dataclass
 
@@ -42,10 +43,12 @@ class ErreurExtraction(Exception):
 
 
 # --- Schéma JSON de sortie -----------------------------------------------------------
-# Contraintes des structured outputs : objets en additionalProperties=false, et au plus
-# 16 champs à type "union" (ex. nombre OU null) par requête. Notre schéma en compterait ~30,
-# donc : les nombres sont des CHAÎNES contrôlées par regex ("1384.73", ou "" si absent),
-# converties en float/None après réception (_convertir_nombres). Zéro union, schéma strict.
+# Contraintes des structured outputs : objets en additionalProperties=false, au plus 16 champs
+# à type "union" (ex. nombre OU null), et une taille de grammaire compilée limitée.
+# Donc : les nombres sont des CHAÎNES simples, sans motif regex (les regex alourdissent fortement
+# la grammaire : erreur « compiled grammar is too large »), converties après réception par
+# _convertir_nombres, qui accepte aussi le format français ("1 384,73").
+# Si l'API refuse malgré tout le schéma, l'extraction repasse en JSON libre (voir _appeler_claude).
 
 CHAMPS_NUMERIQUES = {
     "valeur", "quantite", "largeur_mm", "hauteur_mm", "prix_unitaire", "total",
@@ -56,8 +59,7 @@ CHAMPS_NUMERIQUES = {
 
 def _nullable(type_json: str) -> dict:
     if type_json == "number":
-        return {"type": "string", "pattern": r"^(-?[0-9]+(\.[0-9]+)?)?$",
-                "description": "Nombre avec point décimal (ex. 1384.73), chaîne vide si absent."}
+        return {"type": "string", "description": "Nombre, ex. 1384.73 ; chaîne vide si absent."}
     return {"type": "string", "description": "Chaîne vide si absent."}
 
 
@@ -65,12 +67,30 @@ def _objet(proprietes: dict) -> dict:
     return {"type": "object", "properties": proprietes, "required": list(proprietes), "additionalProperties": False}
 
 
+def lire_nombre(valeur) -> float | None:
+    """'1384.73', '1 384,73', '12 €', 7 -> nombre ; '' ou illisible -> None."""
+    if valeur is None or isinstance(valeur, bool):
+        return None
+    if isinstance(valeur, (int, float)):
+        return float(valeur)
+    texte = re.sub(r"[\s  €]", "", str(valeur))
+    if "," in texte:
+        texte = texte.replace(".", "").replace(",", ".") if "." in texte and texte.rfind(",") > texte.rfind(".") else texte.replace(",", ".")
+    try:
+        return float(texte) if texte else None
+    except ValueError:
+        return None
+
+
 def _convertir_nombres(objet) -> None:
-    """Après réception : "1384.73" -> 1384.73, "" -> None (champs de CHAMPS_NUMERIQUES), "" -> None (textes)."""
+    """Après réception : champs numériques -> float ou None (illisible -> None et a_verifier = true) ; "" -> None."""
     if isinstance(objet, dict):
-        for cle, valeur in objet.items():
-            if isinstance(valeur, str) and cle in CHAMPS_NUMERIQUES:
-                objet[cle] = float(valeur) if valeur else None
+        for cle, valeur in list(objet.items()):
+            if cle in CHAMPS_NUMERIQUES and not isinstance(valeur, (dict, list)):
+                nombre = lire_nombre(valeur)
+                if nombre is None and valeur not in (None, "") and "a_verifier" in objet:
+                    objet["a_verifier"] = True  # valeur présente mais illisible : ne pas l'inventer
+                objet[cle] = nombre
             elif valeur == "" and cle not in ("texte_source", "message"):
                 objet[cle] = None
             else:
@@ -303,30 +323,71 @@ def _construire_consigne(consignes: list[str], pdf_scanne: bool, morceau: tuple[
     return texte
 
 
+_SCHEMA_REFUSE = False  # devient True si l'API refuse le schéma strict : on passe directement en JSON libre
+
+
+def _est_refus_de_schema(exc: Exception) -> bool:
+    message = str(getattr(exc, "message", "") or exc).lower()
+    return any(m in message for m in ("grammar", "schema", "too complex", "output_config"))
+
+
+def _extraire_json(texte: str) -> dict:
+    """JSON libre : retire d'éventuelles balises ```json et prend l'objet entre la première { et la dernière }."""
+    debut, fin = texte.find("{"), texte.rfind("}")
+    if debut < 0 or fin <= debut:
+        raise json.JSONDecodeError("aucun objet JSON", texte, 0)
+    return json.loads(texte[debut:fin + 1])
+
+
+def _completer(donnees: dict) -> dict:
+    """JSON libre : garantit les sections attendues par le moteur, même si Claude en a omis une."""
+    donnees.setdefault("document", {})
+    donnees.setdefault("offre", {}).setdefault("positions", [])
+    donnees.setdefault("analyse_matiere", {}).setdefault("lignes", [])
+    donnees.setdefault("vitrages", {}).setdefault("lignes", [])
+    donnees.setdefault("observations", [])
+    return donnees
+
+
 def _appeler_claude(client: anthropic.Anthropic, pdf: bytes, consigne: str) -> tuple[dict, int, int]:
+    """
+    Mode normal : sortie structurée stricte (output_config), conforme au schéma garanti par l'API.
+    Repli : si l'API refuse le schéma (grammaire trop grande), même demande en JSON libre,
+    le schéma étant donné dans le prompt ; la réponse est relue et complétée par le code.
+    """
+    global _SCHEMA_REFUSE
+    contenu = [
+        {"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
+                                        "data": base64.standard_b64encode(pdf).decode("ascii")}},
+        {"type": "text", "text": consigne},
+    ]
+    strict = not _SCHEMA_REFUSE
     try:
-        reponse = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=MAX_TOKENS_SORTIE,
-            system=PROMPT_SYSTEME,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "document", "source": {
-                        "type": "base64", "media_type": "application/pdf",
-                        "data": base64.standard_b64encode(pdf).decode("ascii"),
-                    }},
-                    {"type": "text", "text": consigne},
-                ],
-            }],
-            output_config={"format": {"type": "json_schema", "schema": SCHEMA_EXTRACTION}},
-        )
+        try:
+            if strict:
+                reponse = client.messages.create(
+                    model=CLAUDE_MODEL, max_tokens=MAX_TOKENS_SORTIE, system=PROMPT_SYSTEME,
+                    messages=[{"role": "user", "content": contenu}],
+                    output_config={"format": {"type": "json_schema", "schema": SCHEMA_EXTRACTION}},
+                )
+        except anthropic.BadRequestError as exc:
+            if not _est_refus_de_schema(exc):
+                raise
+            logger.warning("Schéma strict refusé par l'API (%s) : passage en JSON libre.", getattr(exc, "message", exc))
+            _SCHEMA_REFUSE, strict = True, False
+        if not strict:
+            consigne_libre = (consigne + "\n\nRéponds UNIQUEMENT par un objet JSON, sans texte avant ni après, conforme "
+                              "à ce schéma JSON (tous les champs présents) :\n" + json.dumps(SCHEMA_EXTRACTION, ensure_ascii=False))
+            reponse = client.messages.create(
+                model=CLAUDE_MODEL, max_tokens=MAX_TOKENS_SORTIE, system=PROMPT_SYSTEME,
+                messages=[{"role": "user", "content": [contenu[0], {"type": "text", "text": consigne_libre}]}],
+            )
     except anthropic.AuthenticationError as exc:
         raise ErreurExtraction("Clé API Anthropic invalide : vérifiez ANTHROPIC_API_KEY dans .env.") from exc
     except anthropic.RateLimitError as exc:
         raise ErreurExtraction("Limite de requêtes API atteinte : réessayez dans quelques minutes.") from exc
     except anthropic.BadRequestError as exc:
-        raise ErreurExtraction(f"Requête refusée par l'API (PDF ou schéma) : {exc.message}") from exc
+        raise ErreurExtraction(f"Requête refusée par l'API : {getattr(exc, 'message', exc)}") from exc
     except anthropic.APIError as exc:
         raise ErreurExtraction(f"Erreur de l'API Claude : {exc.__class__.__name__}.") from exc
 
@@ -338,7 +399,7 @@ def _appeler_claude(client: anthropic.Anthropic, pdf: bytes, consigne: str) -> t
     if texte is None:
         raise ErreurExtraction("Réponse de l'API sans contenu exploitable.")
     try:
-        donnees = json.loads(texte)
+        donnees = json.loads(texte) if strict else _completer(_extraire_json(texte))
     except json.JSONDecodeError as exc:
         raise ErreurExtraction("Réponse de l'API non conforme au format JSON attendu.") from exc
     _convertir_nombres(donnees)
